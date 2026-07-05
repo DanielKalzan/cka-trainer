@@ -39,10 +39,10 @@ export default function NavSidebar() {
   const streak = currentStreak(activityDates);
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-edge bg-surface">
-      <div className="flex items-center gap-2 px-5 py-5">
+    <aside className="flex h-full w-16 shrink-0 flex-col border-r border-edge bg-surface md:w-60">
+      <div className="flex items-center justify-center gap-2 px-2 py-5 md:justify-start md:px-5">
         <Terminal className="h-5 w-5 text-term-green" />
-        <span className="font-mono text-sm font-semibold tracking-tight">
+        <span className="hidden font-mono text-sm font-semibold tracking-tight md:inline">
           cka<span className="text-term-green">-trainer</span>
         </span>
       </div>
@@ -54,20 +54,21 @@ export default function NavSidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              title={label}
+              className={`flex items-center justify-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors md:justify-start ${
                 active
                   ? "bg-raised text-ink"
                   : "text-muted hover:bg-raised/60 hover:text-ink"
               }`}
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="hidden md:inline">{label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="space-y-2 border-t border-edge px-5 py-4 text-sm">
+      <div className="hidden space-y-2 border-t border-edge px-5 py-4 text-sm md:block">
         <div className="flex items-center justify-between">
           <span
             className={`flex items-center gap-1.5 ${streak > 0 ? "text-warning" : "text-faint"}`}

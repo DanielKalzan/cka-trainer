@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Terminal as TerminalIcon } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import DomainBadge from "@/components/DomainBadge";
+import DoneCheck from "@/components/gamification/DoneCheck";
 import SandboxTerminal from "@/components/terminal/SandboxTerminal";
 import { DOMAINS } from "@/lib/constants/domains";
 import { getExercises } from "@/lib/content/registry";
@@ -35,6 +36,7 @@ export default function PracticePage() {
                       >
                         <TerminalIcon className="h-4 w-4 shrink-0 text-term-green" />
                         <span className="flex-1 font-medium">{ex.title}</span>
+                        <DoneCheck type="exercise" id={ex.id} />
                         <span className="font-mono text-xs text-muted">
                           {ex.difficulty} · {ex.points} pts
                         </span>

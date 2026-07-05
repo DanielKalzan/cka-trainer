@@ -21,10 +21,12 @@ A gamified, self-paced study web app for the CKA (Certified Kubernetes Administr
 - `/content/<domain-slug>/lessons/*.ts` — lesson content, one file per lesson
 - `/content/<domain-slug>/quiz.ts` — conceptual quiz questions for that domain
 - `/content/<domain-slug>/exercises.ts` — terminal-based exercises for that domain
+- `/content/mock-exams.ts` — mock exam definitions (taskIds reference exercises, mix mirrors domain weights)
+- `/content/cheatsheet.ts` — cheatsheet page data
 - `/lib/terminal-engine/` — the kubectl simulator: `parser.ts`, `cluster-state.ts`, `commands/*.ts` (one file per verb), `checker.ts`
 - `/lib/gamification/` — XP/level math, streak logic, badge rules, readiness score calculation (pure functions)
 - `/lib/constants/domains.ts` — the single source of truth for exam domain weights
-- `/store/` — Zustand stores (`useProgressStore`, `useTerminalStore`)
+- `/store/` — Zustand stores (`useProgressStore` — XP/streak/badges/completion; `useExamStore` — mock exam attempts)
 - `/app/` — routes per Next.js App Router conventions, see site map in `BUILD_PROMPT.md` §7
 
 ## Exam domain weights (do not change without checking the current CNCF CKA curriculum)

@@ -193,7 +193,7 @@ export default function Dashboard() {
                 <span className="font-mono text-xs text-muted">
                   {r.hasContent
                     ? `${r.score}% · ${r.lessonsDone}/${r.lessonsTotal} lessons · ${r.exercisesDone}/${r.exercisesTotal} exercises`
-                    : "content coming in Phase 5"}
+                    : "no content yet"}
                 </span>
               </div>
               <div className="mt-1.5 h-1.5 rounded-full bg-raised">

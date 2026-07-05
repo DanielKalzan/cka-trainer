@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Clock, FileQuestion, Terminal } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import DoneCheck from "@/components/gamification/DoneCheck";
 import { getDomain } from "@/lib/constants/domains";
 import { getExercises, getLessons, getQuiz } from "@/lib/content/registry";
 
@@ -23,7 +24,7 @@ export default function DomainPage({ params }: Props) {
 
       {lessons.length === 0 && exercises.length === 0 ? (
         <div className="rounded-xl border border-dashed border-edge p-8 text-center text-sm text-muted">
-          Content for this domain lands in Phase 5.
+          No content for this domain yet.
         </div>
       ) : (
         <div className="space-y-8">
@@ -45,6 +46,7 @@ export default function DomainPage({ params }: Props) {
                       {i + 1}
                     </span>
                     <span className="flex-1 font-medium">{lesson.title}</span>
+                    <DoneCheck type="lesson" id={lesson.id} />
                     <span className="flex items-center gap-1.5 text-sm text-muted">
                       <Clock className="h-3.5 w-3.5" />
                       {lesson.estMinutes} min
@@ -68,6 +70,7 @@ export default function DomainPage({ params }: Props) {
                   >
                     <Terminal className="h-4 w-4 shrink-0 text-term-green" />
                     <span className="flex-1 font-medium">{ex.title}</span>
+                    <DoneCheck type="exercise" id={ex.id} />
                     <span className="font-mono text-xs text-muted">
                       {ex.difficulty} · {ex.points} pts · ~{Math.round(ex.timeBudgetSeconds / 60)} min
                     </span>
