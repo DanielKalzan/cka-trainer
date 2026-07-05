@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import MarkdownView from "@/components/MarkdownView";
 import LessonTips from "@/components/LessonTips";
+import MarkLessonCompleteButton from "@/components/gamification/MarkLessonCompleteButton";
 import { getDomain } from "@/lib/constants/domains";
 import { getLesson } from "@/lib/content/registry";
 
@@ -24,6 +25,7 @@ export default function LessonPage({ params }: Props) {
       />
       <MarkdownView>{lesson.body}</MarkdownView>
       <LessonTips tips={lesson.tips} />
+      <MarkLessonCompleteButton lessonId={lesson.id} />
     </article>
   );
 }

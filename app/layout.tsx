@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import NavSidebar from "@/components/NavSidebar";
+import FeedbackToasts from "@/components/gamification/FeedbackToasts";
+import StoreHydrator from "@/components/gamification/StoreHydrator";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -28,12 +30,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+        <StoreHydrator />
         <div className="flex h-screen overflow-hidden">
           <NavSidebar />
           <main className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-5xl px-8 py-10">{children}</div>
           </main>
         </div>
+        <FeedbackToasts />
       </body>
     </html>
   );

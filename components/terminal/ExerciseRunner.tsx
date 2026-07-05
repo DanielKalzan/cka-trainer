@@ -14,6 +14,7 @@ import { getExercise } from "@/lib/content/registry";
 import type { ClusterState } from "@/lib/terminal-engine/cluster-state";
 import type { CheckResult } from "@/lib/types/content";
 import MarkdownView from "@/components/MarkdownView";
+import { useProgressStore } from "@/store/useProgressStore";
 import Terminal from "./Terminal";
 
 interface ExerciseRunnerProps {
@@ -41,6 +42,7 @@ function Runner({ exercise }: { exercise: NonNullable<ReturnType<typeof getExerc
   const [hintsShown, setHintsShown] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
+  const recordExercisePass = useProgressStore((s) => s.recordExercisePass);
 
   useEffect(() => {
     if (finishedAt !== null) return;
@@ -51,7 +53,18 @@ function Runner({ exercise }: { exercise: NonNullable<ReturnType<typeof getExerc
   function check() {
     const verdict = exercise.checker(clusterRef.current);
     setResult(verdict);
-    if (verdict.passed && finishedAt === null) setFinishedAt(elapsed);
+    if (verdict.passed && finishedAt === null) {
+      setFinishedAt(elapsed);
+      recordExercisePass({
+        id: exercise.id,
+        domainId: exercise.domainId,
+        points: exercise.points,
+        totalHints: exercise.hints.length,
+        timeBudgetSeconds: exercise.timeBudgetSeconds,
+        timeSeconds: elapsed,
+        hintsUsed: hintsShown,
+      });
+    }
   }
 
   function reset() {

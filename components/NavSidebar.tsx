@@ -13,6 +13,10 @@ import {
   Zap,
 } from "lucide-react";
 
+import { currentStreak } from "@/lib/gamification/streak";
+import { levelProgress } from "@/lib/gamification/xp";
+import { useProgressStore } from "@/store/useProgressStore";
+
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/learn", label: "Learn", icon: BookOpen },
@@ -29,6 +33,10 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function NavSidebar() {
   const pathname = usePathname();
+  const xp = useProgressStore((s) => s.xp);
+  const activityDates = useProgressStore((s) => s.activityDates);
+  const { level, ratio } = levelProgress(xp);
+  const streak = currentStreak(activityDates);
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-edge bg-surface">
@@ -59,14 +67,26 @@ export default function NavSidebar() {
         })}
       </nav>
 
-      {/* Streak + XP — static placeholders until the gamification phase */}
-      <div className="flex items-center justify-between border-t border-edge px-5 py-4 text-sm">
-        <span className="flex items-center gap-1.5 text-warning">
-          <Flame className="h-4 w-4" />0
-        </span>
-        <span className="flex items-center gap-1.5 text-accent">
-          <Zap className="h-4 w-4" />0 XP
-        </span>
+      <div className="space-y-2 border-t border-edge px-5 py-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span
+            className={`flex items-center gap-1.5 ${streak > 0 ? "text-warning" : "text-faint"}`}
+            title={`${streak}-day streak`}
+          >
+            <Flame className="h-4 w-4" />
+            {streak}
+          </span>
+          <span className="flex items-center gap-1.5 text-accent" title={`${xp} XP`}>
+            <Zap className="h-4 w-4" />
+            lvl {level}
+          </span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-raised" title="progress to next level">
+          <div
+            className="h-full rounded-full bg-accent transition-all"
+            style={{ width: `${Math.round(ratio * 100)}%` }}
+          />
+        </div>
       </div>
     </aside>
   );

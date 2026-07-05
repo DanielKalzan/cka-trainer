@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, ChevronRight, Eye, X } from "lucide-react";
 import type { QuizQuestion } from "@/lib/types/content";
 import MarkdownView from "@/components/MarkdownView";
+import { useProgressStore } from "@/store/useProgressStore";
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -23,6 +24,7 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
   const [result, setResult] = useState<Result | null>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+  const recordQuizRun = useProgressStore((s) => s.recordQuizRun);
 
   const q = questions[index];
 
@@ -42,6 +44,7 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
 
   function next() {
     if (index + 1 >= questions.length) {
+      recordQuizRun(questions[0].domainId, score, questions.length);
       setDone(true);
       return;
     }
