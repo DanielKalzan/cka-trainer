@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import MarkdownView from "@/components/MarkdownView";
+import LessonTips from "@/components/LessonTips";
 import { getDomain } from "@/lib/constants/domains";
+import { getLesson } from "@/lib/content/registry";
 
 interface Props {
   params: { domain: string; lessonId: string };
@@ -9,12 +12,18 @@ interface Props {
 export default function LessonPage({ params }: Props) {
   const domain = getDomain(params.domain);
   if (!domain) notFound();
+  const lesson = getLesson(domain.id, params.lessonId);
+  if (!lesson) notFound();
 
   return (
-    <PageHeader
-      title={`Lesson: ${params.lessonId}`}
-      subtitle="Lesson content renders here once the content model lands (Phase 2)."
-      domain={domain}
-    />
+    <article>
+      <PageHeader
+        title={lesson.title}
+        subtitle={`~${lesson.estMinutes} min read`}
+        domain={domain}
+      />
+      <MarkdownView>{lesson.body}</MarkdownView>
+      <LessonTips tips={lesson.tips} />
+    </article>
   );
 }
