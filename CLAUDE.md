@@ -15,6 +15,7 @@ A gamified, self-paced study web app for the CKA (Certified Kubernetes Administr
 - `npm run dev` — start dev server
 - `npm run build` — production build (must pass with zero TS errors before a phase is considered done)
 - `npm run lint` — eslint
+- `npm run test` — vitest (terminal-engine unit + end-to-end exercise tests)
 
 ## Architecture
 - `/content/<domain-slug>/lessons/*.ts` — lesson content, one file per lesson

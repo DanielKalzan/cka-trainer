@@ -339,6 +339,17 @@ export interface KubeContext {
   namespace?: string;
 }
 
+/** Minimal HPA record backing `kubectl autoscale` (simulator-only shape). */
+export interface K8sHpa {
+  name: string;
+  namespace: string;
+  refKind: string;
+  refName: string;
+  minReplicas: number;
+  maxReplicas: number;
+  cpuPercent?: number;
+}
+
 export interface ClusterState {
   nodes: K8sNode[];
   namespaces: K8sNamespace[];
@@ -358,6 +369,7 @@ export interface ClusterState {
   clusterrolebindings: K8sClusterRoleBinding[];
   serviceaccounts: K8sServiceAccount[];
   events: K8sEvent[];
+  hpas: K8sHpa[];
   contexts: KubeContext[];
   currentContext: string;
   /**
@@ -405,6 +417,7 @@ export function emptyClusterState(): ClusterState {
     clusterrolebindings: [],
     serviceaccounts: [],
     events: [],
+    hpas: [],
     contexts: [
       { name: "kubernetes-admin@kubernetes", cluster: "kubernetes", user: "kubernetes-admin" },
     ],

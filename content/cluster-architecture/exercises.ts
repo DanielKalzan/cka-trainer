@@ -214,6 +214,28 @@ function drainInitialState(): ClusterState {
       rolloutHistory: [{ revision: 1, image: "nginx:1.27" }],
     },
   ];
+  state.replicasets = [
+    {
+      apiVersion: "apps/v1",
+      kind: "ReplicaSet",
+      metadata: {
+        name: "web-5d78f9c6b",
+        namespace: "default",
+        labels: { app: "web", "pod-template-hash": "5d78f9c6b" },
+        creationTimestamp: "2026-07-04T10:00:00Z",
+      },
+      spec: {
+        replicas: 2,
+        selector: { matchLabels: { app: "web" } },
+        template: {
+          metadata: { labels: { app: "web", "pod-template-hash": "5d78f9c6b" } },
+          spec: { containers: [{ name: "web", image: "nginx:1.27" }] },
+        },
+      },
+      status: { replicas: 2, readyReplicas: 2 },
+      ownerDeployment: "web",
+    },
+  ];
   state.pods = [
     labPod("web-5d78f9c6b-x2v4q", "default", "node01", { app: "web", "pod-template-hash": "5d78f9c6b" }),
     labPod("web-5d78f9c6b-m8k1p", "default", "node01", { app: "web", "pod-template-hash": "5d78f9c6b" }),
