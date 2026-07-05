@@ -49,3 +49,7 @@ export function getExercise(
 export function getAllExercises(): TerminalExercise[] {
   return Object.values(CONTENT).flatMap((c) => c.exercises);
 }
+
+export function getExerciseById(exerciseId: string): TerminalExercise | undefined {
+  return getAllExercises().find((e) => e.id === exerciseId);
+}

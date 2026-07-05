@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dump, load } from "js-yaml";
-import { getAllExercises } from "@/lib/content/registry";
+import { MOCK_EXAMS } from "@/content/mock-exams";
+import { getAllExercises, getExerciseById } from "@/lib/content/registry";
 import troubleshooting from "@/content/troubleshooting/exercises";
 import networking from "@/content/services-networking/exercises";
 import workloads from "@/content/workloads-scheduling/exercises";
@@ -41,6 +42,19 @@ function editObject(
   const saved = applyEditedYaml(state, res.editor!.target!, dump(doc));
   expect(saved.exitCode, saved.output).toBe(0);
 }
+
+describe("mock exams", () => {
+  for (const exam of MOCK_EXAMS) {
+    it(`${exam.id}: every taskId resolves and none repeat`, () => {
+      const seen = new Set<string>();
+      for (const id of exam.taskIds) {
+        expect(getExerciseById(id), `unknown exercise ${id}`).toBeDefined();
+        expect(seen.has(id), `duplicate task ${id}`).toBe(false);
+        seen.add(id);
+      }
+    });
+  }
+});
 
 describe("every exercise starts unsolved", () => {
   for (const ex of getAllExercises()) {

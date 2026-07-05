@@ -1,4 +1,5 @@
 import PageHeader from "@/components/PageHeader";
+import ExamResults from "@/components/exam/ExamResults";
 
 interface Props {
   params: { attemptId: string };
@@ -6,9 +7,9 @@ interface Props {
 
 export default function ExamResultsPage({ params }: Props) {
   return (
-    <PageHeader
-      title={`Exam Results: ${params.attemptId}`}
-      subtitle="Per-domain score breakdown vs. the 66% bar — lands in Phase 6."
-    />
+    <>
+      <PageHeader title="Exam Results" subtitle="Points-weighted, graded like the real thing." />
+      <ExamResults attemptId={params.attemptId} />
+    </>
   );
 }
