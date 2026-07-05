@@ -1,6 +1,10 @@
 import type { DomainId } from "@/lib/constants/domains";
 import type { DomainContent, Lesson, QuizQuestion, TerminalExercise } from "@/lib/types/content";
 import clusterArchitecture from "@/content/cluster-architecture";
+import troubleshooting from "@/content/troubleshooting";
+import servicesNetworking from "@/content/services-networking";
+import workloadsScheduling from "@/content/workloads-scheduling";
+import storage from "@/content/storage";
 
 /**
  * Central content registry. Domains without content yet simply aren't listed;
@@ -8,7 +12,11 @@ import clusterArchitecture from "@/content/cluster-architecture";
  * one line here.
  */
 const CONTENT: Partial<Record<DomainId, DomainContent>> = {
+  troubleshooting,
   "cluster-architecture": clusterArchitecture,
+  "services-networking": servicesNetworking,
+  "workloads-scheduling": workloadsScheduling,
+  storage,
 };
 
 export function getDomainContent(domainId: DomainId): DomainContent | undefined {
