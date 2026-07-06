@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CKA Trainer
 
-## Getting Started
+A gamified, self-paced study app for the CKA (Certified Kubernetes Administrator) exam. Lessons, quizzes, and — the core of it — hands-on terminal exercises graded automatically against a **real local Kubernetes cluster**.
 
-First, run the development server:
+> ⚠️ This is **not** a static web app. The terminal exercises run real `kubectl` against a local [kind](https://kind.sigs.k8s.io/) (Kubernetes-in-Docker) cluster, streamed to the browser through a small local backend. Docker must be running.
+
+## Prerequisites
+
+- **Docker** — installed and running (the cluster nodes are Docker containers)
+- **kubectl** — on your PATH ([install](https://kubernetes.io/docs/tasks/tools/))
+- **Node.js** 20+
+- `kind` is **not** required up front — if it's missing, `npm run cluster:up` downloads a pinned release into `./bin/` (no sudo, gitignored)
+
+## Quickstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run cluster:up   # create the local kind cluster (~1-2 min first run)
+npm run dev          # frontend + terminal bridge
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cluster management
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+|---|---|
+| `npm run cluster:up` | Create the `cka-trainer` kind cluster (1 control-plane + 2 workers, k8s pinned to the CKA exam version). Idempotent — reuses an existing cluster. |
+| `npm run cluster:down` | Delete the cluster and its kubeconfig. |
+| `npm run cluster:reset` | Full delete + recreate. Per-exercise reset is namespace-scoped and doesn't need this — this is the nuke option. |
 
-## Learn More
+The cluster's kubeconfig is written to `./.kubeconfig` (gitignored). Everything in this app — terminal sessions, exercise checkers, scripts — uses that file exclusively; **your `~/.kube/config` and its contexts are never touched.**
 
-To learn more about Next.js, take a look at the following resources:
+## Security note
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The terminal bridge binds to `127.0.0.1` only and gives the browser terminal a real shell on your machine (that's the point — real `kubectl`, real vim, real cluster). Single-user, local-only by design. Don't expose the bridge port to a network.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+- `npm run dev` — dev server (Next.js frontend + terminal bridge)
+- `npm run build` — production build
+- `npm run lint` — eslint
+- `npm run test` — vitest
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Docs
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `CLAUDE.md` — living architecture/conventions reference
+- `MIGRATION_PROMPT.md` — why and how the terminal moved from an in-memory simulation to a real kind cluster

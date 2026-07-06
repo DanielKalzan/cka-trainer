@@ -1,0 +1,14 @@
+# Local training cluster for CKA Trainer.
+# The image is pinned to the k8s minor the CKA exam currently runs (v1.35 as of July 2026);
+# bump deliberately when the exam environment moves, not as a side effect of a kind upgrade.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: cka-trainer
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
+  # Two workers so drain/taint/affinity exercises have somewhere to reschedule pods.
+  - role: worker
+    image: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
+  - role: worker
+    image: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
