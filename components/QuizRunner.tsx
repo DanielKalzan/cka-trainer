@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronRight, Eye, X } from "lucide-react";
 import type { QuizQuestion } from "@/lib/types/content";
 import MarkdownView from "@/components/MarkdownView";
 import { useProgressStore } from "@/store/useProgressStore";
+import { pickRandom } from "@/lib/quiz/shuffle";
+import { QUIZ_LENGTH } from "@/lib/constants/quiz";
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -17,7 +19,18 @@ function isTextAnswerCorrect(q: QuizQuestion, answer: string): boolean {
 
 type Result = { correct: boolean; revealed: boolean };
 
-export default function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
+export default function QuizRunner({
+  questions,
+  length = QUIZ_LENGTH,
+}: {
+  questions: QuizQuestion[];
+  length?: number;
+}) {
+  // Picked client-side only (useEffect, not a useState initializer) — SSR has no
+  // access to the client's Math.random seed, so computing the pool during render
+  // would produce a different set on the server vs. on hydration and trigger a
+  // hydration mismatch. Mirrors the mount-after-hydration idiom in StoreHydrator.
+  const [pool, setPool] = useState<QuizQuestion[] | null>(null);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
@@ -26,7 +39,15 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
   const [done, setDone] = useState(false);
   const recordQuizRun = useProgressStore((s) => s.recordQuizRun);
 
-  const q = questions[index];
+  useEffect(() => {
+    setPool(pickRandom(questions, length));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions]);
+
+  if (!pool) return null;
+  const currentPool = pool;
+
+  const q = currentPool[index];
 
   function submit() {
     if (result) return;
@@ -43,8 +64,8 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
   }
 
   function next() {
-    if (index + 1 >= questions.length) {
-      recordQuizRun(questions[0].domainId, score, questions.length);
+    if (index + 1 >= currentPool.length) {
+      recordQuizRun(currentPool[0].domainId, score, currentPool.length);
       setDone(true);
       return;
     }
@@ -55,15 +76,16 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
   }
 
   if (done) {
-    const pct = Math.round((score / questions.length) * 100);
+    const pct = Math.round((score / currentPool.length) * 100);
     return (
       <div className="rounded-xl border border-edge bg-surface p-8 text-center">
         <div className="font-mono text-4xl font-bold">{pct}%</div>
         <p className="mt-2 text-muted">
-          {score} / {questions.length} correct
+          {score} / {currentPool.length} correct
         </p>
         <button
           onClick={() => {
+            setPool(pickRandom(questions, length));
             setIndex(0);
             setSelected(null);
             setTyped("");
@@ -83,7 +105,7 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
     <div className="space-y-5">
       <div className="flex items-center justify-between text-sm text-muted">
         <span>
-          Question {index + 1} / {questions.length}
+          Question {index + 1} / {currentPool.length}
         </span>
         <span className="font-mono">{score} correct</span>
       </div>
@@ -172,7 +194,7 @@ export default function QuizRunner({ questions }: { questions: QuizQuestion[] })
             onClick={next}
             className="flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2 text-sm font-medium text-bg transition-opacity hover:opacity-90"
           >
-            {index + 1 >= questions.length ? "Finish" : "Next"}
+            {index + 1 >= currentPool.length ? "Finish" : "Next"}
             <ChevronRight className="h-4 w-4" />
           </button>
         ) : (

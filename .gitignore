@@ -38,3 +38,6 @@ next-env.d.ts
 # cka-trainer local cluster
 /.kubeconfig
 /bin/
+
+
+.agents

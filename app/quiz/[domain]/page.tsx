@@ -19,13 +19,18 @@ export default function QuizPage({ params }: Props) {
         title={`${domain.shortName} Quiz`}
         subtitle="Concept checks — the hands-on version lives in the terminal exercises."
         domain={domain}
+        breadcrumbs={[
+          { label: "Learn", href: "/learn" },
+          { label: domain.shortName, href: `/learn/${domain.id}` },
+          { label: "Quiz" },
+        ]}
       />
       {questions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-edge p-8 text-center text-sm text-muted">
           Quiz for this domain lands in Phase 5.
         </div>
       ) : (
-        <QuizRunner questions={questions} />
+        <QuizRunner key={domain.id} questions={questions} />
       )}
     </>
   );

@@ -98,6 +98,139 @@ const quiz: QuizQuestion[] = [
     explanation:
       "Environment variables are injected once at container start and never updated. Only fresh containers see new values — rollout restart replaces the pods gracefully. (Volume-mounted keys, by contrast, do refresh in place.)",
   },
+  {
+    id: "ws-q-init-container-crash",
+    domainId: "workloads-scheduling",
+    type: "multiple-choice",
+    prompt: "A pod shows status `Init:CrashLoopBackOff`. What does that tell you?",
+    options: [
+      "One of its init containers is failing and restarting — the main containers haven't started at all yet",
+      "The main container crashed during its first few seconds of life",
+      "An initContainer succeeded but the main container's image can't be pulled",
+      "The pod's readiness probe is failing during startup",
+    ],
+    correctAnswer:
+      "One of its init containers is failing and restarting — the main containers haven't started at all yet",
+    explanation:
+      "Init containers run sequentially, in order, and every one must exit 0 before any app container starts. Init:CrashLoopBackOff means kubelet keeps restarting a failing init container — check its logs with `kubectl logs <pod> -c <init-container-name>`.",
+  },
+  {
+    id: "ws-q-job-completions-parallelism",
+    domainId: "workloads-scheduling",
+    type: "multiple-choice",
+    prompt: "A Job sets `completions: 5` and `parallelism: 2`. What does this mean?",
+    options: [
+      "5 pods must complete successfully in total, at most 2 running concurrently at any time",
+      "Exactly 2 pods run, each must complete 5 times",
+      "5 pods run concurrently, exactly 2 must succeed",
+      "It's invalid — completions and parallelism must be equal",
+    ],
+    correctAnswer: "5 pods must complete successfully in total, at most 2 running concurrently at any time",
+    explanation:
+      "completions is the target number of successful pod completions overall; parallelism caps how many pods the Job runs at once while working toward that target. They're independent knobs, not required to match.",
+  },
+  {
+    id: "ws-q-cronjob-concurrency",
+    domainId: "workloads-scheduling",
+    type: "multiple-choice",
+    prompt:
+      "A CronJob's previous run is still executing when the next scheduled time arrives. With `concurrencyPolicy: Forbid`, what happens?",
+    options: [
+      "The new run is skipped entirely — it does not queue and does not run later",
+      "The new run queues and starts as soon as the previous one finishes",
+      "The previous run is killed and replaced by the new one",
+      "Both runs execute concurrently, as normal",
+    ],
+    correctAnswer: "The new run is skipped entirely — it does not queue and does not run later",
+    explanation:
+      "Forbid simply skips the overlapping run (counted as a missed run) — it does NOT queue it for later. Replace kills the old run and starts the new one instead; the default, Allow, runs both concurrently.",
+  },
+  {
+    id: "ws-q-pdb-scope",
+    domainId: "workloads-scheduling",
+    type: "multiple-choice",
+    prompt:
+      "A PodDisruptionBudget sets `minAvailable: 2` for a Deployment with 3 replicas. A node hosting one of its pods suddenly crashes (hardware failure). What happens?",
+    options: [
+      "The pod is lost immediately — PDBs only block VOLUNTARY disruptions like drain/evict, not involuntary node failures",
+      "The crash is blocked/delayed until another pod is available, per the PDB",
+      "Kubernetes refuses to let the node fail while the PDB is active",
+      "The Deployment is paused until minAvailable is satisfied again",
+    ],
+    correctAnswer:
+      "The pod is lost immediately — PDBs only block VOLUNTARY disruptions like drain/evict, not involuntary node failures",
+    explanation:
+      "A PDB is consulted by the Eviction API — used by `kubectl drain`, cluster-autoscaler, etc. — for voluntary disruptions. It has zero effect on involuntary ones (node crashes, OOM kills, kernel panics); those just happen, and the Deployment controller reconciles by scheduling a replacement pod elsewhere.",
+  },
+  {
+    id: "ws-q-pdb-both-fields",
+    domainId: "workloads-scheduling",
+    type: "yaml-fix",
+    prompt: `This PodDisruptionBudget is rejected by the API server. Why?
+
+\`\`\`yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+spec:
+  minAvailable: 2
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: web
+\`\`\``,
+    correctAnswer: "minAvailable and maxUnavailable are mutually exclusive — set only one",
+    acceptableAnswers: [
+      "can't set both minAvailable and maxUnavailable",
+      "remove one of minAvailable or maxUnavailable",
+      "only one of minAvailable/maxUnavailable is allowed",
+    ],
+    explanation:
+      "A PDB accepts exactly one of minAvailable or maxUnavailable, never both — they're two ways of expressing the same budget, and the API rejects a spec that sets both.",
+  },
+  {
+    id: "ws-q-node-affinity-hard-soft",
+    domainId: "workloads-scheduling",
+    type: "multiple-choice",
+    prompt:
+      "Which nodeAffinity term is a HARD requirement (the scheduler will not place the pod otherwise), as opposed to a preference?",
+    options: [
+      "requiredDuringSchedulingIgnoredDuringExecution",
+      "preferredDuringSchedulingIgnoredDuringExecution",
+      "requiredDuringExecution",
+      "weightedPodAffinityTerm",
+    ],
+    correctAnswer: "requiredDuringSchedulingIgnoredDuringExecution",
+    explanation:
+      "'required...' is a hard constraint the scheduler must satisfy to place the pod at all; 'preferred...' is best-effort (weighted), and the pod can still land elsewhere if no node satisfies it. 'IgnoredDuringExecution' in both means already-running pods aren't evicted if node labels change later.",
+  },
+  {
+    id: "ws-q-scheduler-uses-requests",
+    domainId: "workloads-scheduling",
+    type: "command-fill",
+    prompt:
+      "The scheduler's bin-packing decision (does this node have room for this pod?) is based on a container's `resources.___` field, not its limits.",
+    correctAnswer: "requests",
+    acceptableAnswers: ["requests", "resources.requests"],
+    explanation:
+      "Requests are what the scheduler reserves against a node's allocatable capacity. Limits only bound actual runtime usage (throttling CPU, or OOM-killing on memory) — a node can be scheduled full of pods whose limits, if all hit simultaneously, would exceed its physical capacity.",
+  },
+  {
+    id: "ws-q-rollout-undo",
+    domainId: "workloads-scheduling",
+    type: "command-fill",
+    prompt:
+      "Deployment `web` just rolled out a bad image. Roll it back to revision 3 specifically (not just 'one step back'):",
+    correctAnswer: "kubectl rollout undo deployment/web --to-revision=3",
+    acceptableAnswers: [
+      "kubectl rollout undo deployment/web --to-revision=3",
+      "kubectl rollout undo deployment web --to-revision=3",
+      "k rollout undo deployment/web --to-revision=3",
+    ],
+    explanation:
+      "--to-revision=N targets a specific entry in the Deployment's revision history (see kubectl rollout history deployment/web); omitting it just undoes to the immediately-previous revision.",
+  },
 ];
 
 export default quiz;

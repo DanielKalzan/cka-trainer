@@ -97,6 +97,129 @@ spec:
     explanation:
       "claimName lives under persistentVolumeClaim, not hostPath: volumes[].persistentVolumeClaim.claimName: logs-claim. hostPath mounts a node directory and takes path:, not claimName.",
   },
+  {
+    id: "st-q-reclaim-delete-default",
+    domainId: "storage",
+    type: "multiple-choice",
+    prompt:
+      "A PVC using a dynamically-provisioned StorageClass (no reclaimPolicy set explicitly) is deleted. What happens to the PV and underlying storage?",
+    options: [
+      "Both the PV object and the underlying storage volume are deleted — Delete is the default reclaimPolicy",
+      "The PV becomes Released but the data and PV object are kept, waiting for an admin",
+      "Nothing happens until you also delete the StorageClass",
+      "The PV is recycled and scrubbed for reuse (Recycle is the default)",
+    ],
+    correctAnswer: "Both the PV object and the underlying storage volume are deleted — Delete is the default reclaimPolicy",
+    explanation:
+      "Delete is the default reclaimPolicy for dynamically-provisioned volumes — deleting the PVC triggers deletion of both the PV object and the backing storage. Retain (data + PV object kept) must be set explicitly; Recycle is deprecated.",
+  },
+  {
+    id: "st-q-allow-volume-expansion",
+    domainId: "storage",
+    type: "command-fill",
+    prompt:
+      "Which single field, set on a StorageClass, must be `true` before a PVC using that class can be resized larger?",
+    correctAnswer: "allowVolumeExpansion",
+    acceptableAnswers: ["allowVolumeExpansion", "allowVolumeExpansion: true"],
+    explanation:
+      "Without allowVolumeExpansion: true on the StorageClass, editing a PVC's spec.resources.requests.storage to a larger value is rejected. Expansion only ever grows a volume — you can't shrink one this way.",
+  },
+  {
+    id: "st-q-emptydir-lifecycle",
+    domainId: "storage",
+    type: "multiple-choice",
+    prompt:
+      "A pod has an `emptyDir` volume. A container inside it crashes and is restarted by kubelet. What happens to the emptyDir's contents?",
+    options: [
+      "They survive — emptyDir is tied to the Pod's lifetime, not any single container's",
+      "They're wiped — emptyDir resets on every container restart",
+      "They move to the next node the pod is rescheduled to",
+      "They persist even after the whole Pod is deleted",
+    ],
+    correctAnswer: "They survive — emptyDir is tied to the Pod's lifetime, not any single container's",
+    explanation:
+      "emptyDir's contents survive individual container crashes/restarts within the same Pod. They're only wiped when the POD itself is removed from the node — and they never survive a reschedule to a different node, since the storage is node-local.",
+  },
+  {
+    id: "st-q-emptydir-memory",
+    domainId: "storage",
+    type: "command-fill",
+    prompt: "Which `emptyDir.medium` value backs the volume with tmpfs (RAM) instead of the node's disk?",
+    correctAnswer: "Memory",
+    acceptableAnswers: ["Memory", "medium: Memory"],
+    explanation:
+      "medium: Memory mounts the emptyDir as tmpfs — fast, but it counts against the pod's memory usage and vanishes completely if the pod is deleted or the node reboots (it was never on disk).",
+  },
+  {
+    id: "st-q-rox-meaning",
+    domainId: "storage",
+    type: "multiple-choice",
+    prompt: "ReadOnlyMany (ROX) precisely means:",
+    options: [
+      "Mountable read-only by many nodes simultaneously",
+      "Mountable read-only by a single pod, read-write by others",
+      "One writer node, unlimited read-only pods on that same node",
+      "Read-write until the first mount, then locked read-only",
+    ],
+    correctAnswer: "Mountable read-only by many nodes simultaneously",
+    explanation:
+      "Like RWO/RWX, ROX is a per-NODE access mode — many nodes (and any number of pods on each) can mount the volume read-only at once. It says nothing about write access, which requires RWO or RWX instead.",
+  },
+  {
+    id: "st-q-default-storageclass",
+    domainId: "storage",
+    type: "command-fill",
+    prompt:
+      "A PVC omits `storageClassName` entirely. Which annotation on a StorageClass marks it as the one that gets used automatically?",
+    correctAnswer: "storageclass.kubernetes.io/is-default-class",
+    acceptableAnswers: [
+      "storageclass.kubernetes.io/is-default-class",
+      'storageclass.kubernetes.io/is-default-class: "true"',
+    ],
+    explanation:
+      'Omitting storageClassName doesn\'t mean "no class" — it means "whichever StorageClass is annotated storageclass.kubernetes.io/is-default-class: \'true\'". If no class carries that annotation, the PVC stays unbound instead.',
+  },
+  {
+    id: "st-q-accessmode-mismatch",
+    domainId: "storage",
+    type: "yaml-fix",
+    prompt: `The PVC stays Pending and never binds to pv-logs, even though 10Gi easily covers the 5Gi request. Why?
+
+\`\`\`yaml
+# PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-logs
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+# candidate PV
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-logs
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  hostPath:
+    path: /data/logs
+\`\`\``,
+    correctAnswer: "The PV only lists ReadWriteOnce — it doesn't support ReadWriteMany, which the PVC requires",
+    acceptableAnswers: [
+      "PV doesn't offer ReadWriteMany",
+      "accessModes mismatch: PV is RWO, PVC wants RWX",
+      "add ReadWriteMany to the PV's accessModes",
+    ],
+    explanation:
+      "A PVC only binds to a PV whose accessModes include everything the PVC requests. Capacity being sufficient doesn't matter if the access mode itself isn't offered — a PV must list ReadWriteMany for an RWX claim to ever bind to it.",
+  },
 ];
 
 export default quiz;
