@@ -16,7 +16,15 @@ export default function ExercisePage({ params }: Props) {
 
   return (
     <>
-      <PageHeader title={exercise.title} domain={domain} />
+      <PageHeader
+        title={exercise.title}
+        domain={domain}
+        breadcrumbs={[
+          { label: "Practice", href: "/practice" },
+          { label: domain.shortName, href: `/learn/${domain.id}` },
+          { label: exercise.title },
+        ]}
+      />
       <ExerciseRunner domainId={domain.id} exerciseId={exercise.id} />
     </>
   );

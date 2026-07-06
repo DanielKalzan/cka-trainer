@@ -22,6 +22,11 @@ export default function LessonPage({ params }: Props) {
         title={lesson.title}
         subtitle={`~${lesson.estMinutes} min read`}
         domain={domain}
+        breadcrumbs={[
+          { label: "Learn", href: "/learn" },
+          { label: domain.shortName, href: `/learn/${domain.id}` },
+          { label: lesson.title },
+        ]}
       />
       <MarkdownView>{lesson.body}</MarkdownView>
       <LessonTips tips={lesson.tips} />
