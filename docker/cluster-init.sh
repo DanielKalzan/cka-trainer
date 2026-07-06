@@ -23,3 +23,5 @@ kind get kubeconfig --name "$CLUSTER_NAME" > .kubeconfig
 echo
 echo "Smoke test (kubectl get nodes):"
 kubectl --kubeconfig .kubeconfig get nodes
+
+bash scripts/cluster/warm-images.sh "$(command -v kind)" "$CLUSTER_NAME"

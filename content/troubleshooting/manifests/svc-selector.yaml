@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  labels:
+    app: catalog
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog
+  template:
+    metadata:
+      labels:
+        app: catalog
+    spec:
+      containers:
+        - name: catalog
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 8080
+---
+# selector typo ("catalogue") — the service never finds the pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: catalogue
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP

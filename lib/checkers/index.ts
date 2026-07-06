@@ -1,5 +1,18 @@
 import type { CheckResult } from "@/lib/types/content";
+import { checkNodeMaintenance, checkRbacCi } from "./cluster-architecture";
+import { checkExpose, checkNetpol, checkNodePort } from "./services-networking";
 import { checkPvPvcPod, checkStorageClassClaim } from "./storage";
+import {
+  checkCrashLoop,
+  checkImagePull,
+  checkSvcSelector,
+  checkTaintPending,
+} from "./troubleshooting";
+import {
+  checkDedicatedNode,
+  checkRollback,
+  checkScaleAutoscale,
+} from "./workloads-scheduling";
 
 /**
  * Server-side checker registry, keyed by exercise id. The bridge resolves an
@@ -10,8 +23,20 @@ import { checkPvPvcPod, checkStorageClassClaim } from "./storage";
 export type LiveChecker = (namespace: string) => Promise<CheckResult>;
 
 const CHECKERS: Record<string, LiveChecker> = {
+  "ca-ex-rbac-ci": checkRbacCi,
+  "ca-ex-node-maintenance": checkNodeMaintenance,
+  "sn-ex-expose": checkExpose,
+  "sn-ex-nodeport": checkNodePort,
+  "sn-ex-netpol": checkNetpol,
   "st-ex-pv-pvc-pod": checkPvPvcPod,
   "st-ex-storageclass": checkStorageClassClaim,
+  "ts-ex-imagepull": checkImagePull,
+  "ts-ex-crashloop": checkCrashLoop,
+  "ts-ex-svc-selector": checkSvcSelector,
+  "ts-ex-taint-pending": checkTaintPending,
+  "ws-ex-rollback": checkRollback,
+  "ws-ex-scale-autoscale": checkScaleAutoscale,
+  "ws-ex-dedicated-node": checkDedicatedNode,
 };
 
 export function getLiveChecker(exerciseId: string): LiveChecker | undefined {

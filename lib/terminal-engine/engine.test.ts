@@ -11,14 +11,15 @@ function fresh(): ClusterState {
   return s;
 }
 
+// Only the etcd exercise still carries sim fields — the rest run live.
 function exerciseState(id: string): ClusterState {
   const ex = exercises.find((e) => e.id === id);
-  if (!ex) throw new Error(`no exercise ${id}`);
+  if (!ex?.initialState) throw new Error(`no sim exercise ${id}`);
   return structuredClone(ex.initialState);
 }
 
 function checker(id: string) {
-  return exercises.find((e) => e.id === id)!.checker;
+  return exercises.find((e) => e.id === id)!.checker!;
 }
 
 describe("parser", () => {
@@ -163,14 +164,36 @@ describe("node ops", () => {
   });
 
   it("drain requires --ignore-daemonsets when DS pods exist, then evicts", () => {
-    const s = exerciseState("ca-ex-node-maintenance");
+    // Local fixture: the node-maintenance exercise runs live now, but the sim
+    // engine's drain semantics stay covered until the engine is deleted.
+    const s = fresh();
+    executeCommand(s, "kubectl create deployment web --image=nginx:1.27 --replicas=2");
+    s.pods.forEach((p) => (p.spec.nodeName = "node01"));
+    s.pods.push({
+      apiVersion: "v1",
+      kind: "Pod",
+      metadata: {
+        name: "kube-proxy-r7t2w",
+        namespace: "kube-system",
+        labels: { "k8s-app": "kube-proxy" },
+        creationTimestamp: "2026-07-04T10:00:00Z",
+        annotations: { "kubernetes.io/managed-by": "DaemonSet" },
+      },
+      spec: { containers: [{ name: "kube-proxy", image: "registry.k8s.io/kube-proxy" }], nodeName: "node01" },
+      status: { phase: "Running" },
+    });
     const refuse = executeCommand(s, "kubectl drain node01");
     expect(refuse.exitCode).toBe(1);
     expect(refuse.output).toContain("--ignore-daemonsets");
     const res = executeCommand(s, "kubectl drain node01 --ignore-daemonsets");
     expect(res.exitCode).toBe(0);
-    const verdict = checker("ca-ex-node-maintenance")(s);
-    expect(verdict.passed).toBe(true);
+    expect(s.nodes[1].spec.unschedulable).toBe(true);
+    const strays = s.pods.filter(
+      (p) =>
+        p.spec.nodeName === "node01" &&
+        p.metadata.annotations?.["kubernetes.io/managed-by"] !== "DaemonSet",
+    );
+    expect(strays).toHaveLength(0);
   });
 
   it("taint add and remove", () => {
@@ -212,8 +235,9 @@ describe("etcdctl (mocked)", () => {
 });
 
 describe("RBAC end-to-end", () => {
-  it("imperative SA + role + rolebinding passes the checker and auth can-i", () => {
-    const s = exerciseState("ca-ex-rbac-ci");
+  it("imperative SA + role + rolebinding grants exactly what auth can-i reports", () => {
+    const s = fresh();
+    executeCommand(s, "kubectl create namespace build");
     executeCommand(s, "kubectl create serviceaccount ci-bot -n build");
     executeCommand(
       s,
@@ -223,7 +247,9 @@ describe("RBAC end-to-end", () => {
       s,
       "kubectl create rolebinding ci-bot-deploy --role=deploy-manager --serviceaccount=build:ci-bot -n build",
     );
-    expect(checker("ca-ex-rbac-ci")(s).passed).toBe(true);
+    expect(s.serviceaccounts.some((a) => a.metadata.name === "ci-bot")).toBe(true);
+    expect(s.roles.some((r) => r.metadata.name === "deploy-manager")).toBe(true);
+    expect(s.rolebindings.some((b) => b.metadata.name === "ci-bot-deploy")).toBe(true);
 
     const yes = executeCommand(
       s,

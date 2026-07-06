@@ -1,0 +1,23 @@
+# Pinned to cka-trainer-worker, which the session setup taints BEFORE applying
+# this — so the pods are born Pending with a FailedScheduling event naming the taint.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue
+  labels:
+    app: queue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: queue
+  template:
+    metadata:
+      labels:
+        app: queue
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: cka-trainer-worker
+      containers:
+        - name: queue
+          image: redis:7.4-alpine

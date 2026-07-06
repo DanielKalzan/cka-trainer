@@ -66,6 +66,20 @@ export interface LiveExerciseConfig {
   manifest?: string;
   /** Node-level scenario id under /scripts/scenarios (setup/teardown scripts). */
   scenario?: string;
+  /**
+   * kubectl arg-arrays run in order AFTER the manifest apply, namespaced to the
+   * session (`kubectl -n <session-ns> <args…>`). For setup a manifest can't
+   * express: node taints, rollout history, breaking a running object. When
+   * ordering matters (e.g. taint must land before pods schedule), skip
+   * `manifest` and put the apply in here explicitly.
+   */
+  setupCommands?: string[][];
+  /**
+   * Best-effort kubectl arg-arrays run at teardown, before the namespace
+   * delete. Restore shared node state the exercise mutates (uncordon, remove
+   * taints/labels) — failures are ignored (the user may have cleaned up already).
+   */
+  teardownCommands?: string[][];
   clusterScopedCleanup?: ClusterScopedRef[];
 }
 
@@ -75,8 +89,9 @@ export interface TerminalExercise {
   title: string;
   /** Exam-style task text (markdown). */
   scenario: string;
-  /** @deprecated sim-terminal state — removed once all domains + exam run live. */
-  initialState: ClusterState;
+  /** @deprecated sim-terminal state — only the etcd exercise still carries it
+   *  (converts in the scenario-scripts step); removed with the sim engine. */
+  initialState?: ClusterState;
   /** Progressively more revealing. Index 0 is cheapest; last entry is the full solution. */
   hints: string[];
   /**
@@ -84,7 +99,7 @@ export interface TerminalExercise {
    * troubleshooting tasks have multiple valid solution paths.
    * @deprecated sim checker — live exercises are graded server-side via /lib/checkers.
    */
-  checker: (state: ClusterState) => CheckResult;
+  checker?: (state: ClusterState) => CheckResult;
   /** Present once the exercise is migrated to the real cluster (practice mode
    *  uses it; the mock exam keeps the sim path until its own migration step). */
   live?: LiveExerciseConfig;

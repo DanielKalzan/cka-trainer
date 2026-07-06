@@ -48,6 +48,7 @@ function LiveRunner({ exercise }: { exercise: TerminalExercise }) {
   const terminalRef = useRef<LiveTerminalHandle>(null);
   const [sessionKey, setSessionKey] = useState(0);
   const [ready, setReady] = useState(false);
+  const [namespace, setNamespace] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [hintsShown, setHintsShown] = useState(0);
@@ -62,15 +63,11 @@ function LiveRunner({ exercise }: { exercise: TerminalExercise }) {
     return () => clearInterval(t);
   }, [ready, finishedAt, sessionKey]);
 
-  function check() {
-    if (!terminalRef.current?.requestCheck()) {
-      setResult({ passed: false, feedback: "Terminal isn't connected — reconnect and try again." });
-      return;
-    }
+  async function check() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
     setChecking(true);
-  }
-
-  function onCheckResult(verdict: CheckResult) {
+    const verdict = await terminal.check();
     setChecking(false);
     setResult(verdict);
     if (verdict.passed && finishedAt === null) {
@@ -92,6 +89,7 @@ function LiveRunner({ exercise }: { exercise: TerminalExercise }) {
     setElapsed(0);
     setFinishedAt(null);
     setReady(false);
+    setNamespace(null);
     setChecking(false);
     setSessionKey((k) => k + 1); // remount = fresh namespace server-side
   }
@@ -118,6 +116,14 @@ function LiveRunner({ exercise }: { exercise: TerminalExercise }) {
           <Award className="h-3.5 w-3.5" />
           {exercise.points} pts
         </span>
+        {namespace ? (
+          <span
+            className="rounded-lg border border-edge px-3 py-1.5 text-muted"
+            title="This session's namespace — the terminal's default"
+          >
+            ns {namespace}
+          </span>
+        ) : null}
         <span className="flex-1" />
         {hintsShown < exercise.hints.length ? (
           <button
@@ -189,15 +195,19 @@ function LiveRunner({ exercise }: { exercise: TerminalExercise }) {
         key={sessionKey}
         ref={terminalRef}
         exerciseId={exercise.id}
-        onReady={() => setReady(true)}
-        onCheckResult={onCheckResult}
+        onReady={(ns) => {
+          setReady(true);
+          setNamespace(ns);
+        }}
       />
     </div>
   );
 }
 
+// Sim runner — only the etcd exercise still uses it (its sim fields are
+// guaranteed present until the scenario-scripts step converts it).
 function Runner({ exercise }: { exercise: NonNullable<ReturnType<typeof getExercise>> }) {
-  const clusterRef = useRef<ClusterState>(structuredClone(exercise.initialState));
+  const clusterRef = useRef<ClusterState>(structuredClone(exercise.initialState!));
   const [sessionKey, setSessionKey] = useState(0);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [hintsShown, setHintsShown] = useState(0);
@@ -212,7 +222,7 @@ function Runner({ exercise }: { exercise: NonNullable<ReturnType<typeof getExerc
   }, [finishedAt, sessionKey]);
 
   function check() {
-    const verdict = exercise.checker(clusterRef.current);
+    const verdict = exercise.checker!(clusterRef.current);
     setResult(verdict);
     if (verdict.passed && finishedAt === null) {
       setFinishedAt(elapsed);
@@ -229,7 +239,7 @@ function Runner({ exercise }: { exercise: NonNullable<ReturnType<typeof getExerc
   }
 
   function reset() {
-    clusterRef.current = structuredClone(exercise.initialState);
+    clusterRef.current = structuredClone(exercise.initialState!);
     setResult(null);
     setElapsed(0);
     setFinishedAt(null);

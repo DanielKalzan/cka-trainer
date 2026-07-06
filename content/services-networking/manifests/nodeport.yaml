@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hits
+  labels:
+    app: hits
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hits
+  template:
+    metadata:
+      labels:
+        app: hits
+    spec:
+      containers:
+        - name: hits
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 3000

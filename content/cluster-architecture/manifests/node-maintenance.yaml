@@ -1,0 +1,24 @@
+# Workload pinned to cka-trainer-worker so draining it has real victims.
+# After the drain the replacement pods sit Pending (nowhere else allowed) —
+# that's the expected mid-maintenance state the checker looks for.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: cka-trainer-worker
+      containers:
+        - name: web
+          image: nginx:1.27-alpine

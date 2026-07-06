@@ -18,8 +18,9 @@ const WS_URL =
 type ConnectionStatus = "connecting" | "provisioning" | "connected" | "disconnected";
 
 export interface LiveTerminalHandle {
-  /** Ask the bridge to grade the exercise; result arrives via onCheckResult. */
-  requestCheck: () => boolean;
+  /** Ask the bridge to grade the exercise against this session's namespace.
+   *  Resolves with a failed CheckResult (never rejects) if disconnected. */
+  check: () => Promise<CheckResult>;
 }
 
 interface LiveTerminalProps {
@@ -27,7 +28,6 @@ interface LiveTerminalProps {
   exerciseId?: string;
   /** Fired when the shell is live. namespace is null for sandbox sessions. */
   onReady?: (namespace: string | null) => void;
-  onCheckResult?: (result: CheckResult) => void;
 }
 
 /**
@@ -37,26 +37,35 @@ interface LiveTerminalProps {
  * Remount (change key) to get a fresh session — for exercises that means a
  * brand-new namespace, which is exactly what "reset" should do.
  */
+const DISCONNECTED_RESULT: CheckResult = {
+  passed: false,
+  feedback: "Terminal isn't connected — reconnect and try again.",
+};
+
 const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
-  function LiveTerminal({ exerciseId, onReady, onCheckResult }, ref) {
+  function LiveTerminal({ exerciseId, onReady }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    // FIFO of in-flight check requests; the bridge answers them in order.
+    const pendingChecksRef = useRef<Array<(r: CheckResult) => void>>([]);
     const [status, setStatus] = useState<ConnectionStatus>("connecting");
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [sessionKey, setSessionKey] = useState(0);
 
     // Keep latest callbacks without retriggering the connection effect.
     const onReadyRef = useRef(onReady);
-    const onCheckResultRef = useRef(onCheckResult);
     onReadyRef.current = onReady;
-    onCheckResultRef.current = onCheckResult;
 
     useImperativeHandle(ref, () => ({
-      requestCheck: () => {
+      check: () => {
         const ws = wsRef.current;
-        if (ws?.readyState !== WebSocket.OPEN) return false;
-        ws.send(JSON.stringify({ type: "check" }));
-        return true;
+        if (ws?.readyState !== WebSocket.OPEN) {
+          return Promise.resolve(DISCONNECTED_RESULT);
+        }
+        return new Promise<CheckResult>((resolve) => {
+          pendingChecksRef.current.push(resolve);
+          ws.send(JSON.stringify({ type: "check" }));
+        });
       },
     }));
 
@@ -118,10 +127,21 @@ const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
           setStatus(exerciseId ? "provisioning" : "connected");
           sendResize();
         };
+        const flushPending = () => {
+          const pending = pendingChecksRef.current.splice(0);
+          pending.forEach((resolve) =>
+            resolve({
+              passed: false,
+              feedback: "Terminal disconnected before grading finished.",
+            }),
+          );
+        };
         ws.onclose = () => {
+          flushPending();
           if (!disposed) setStatus("disconnected");
         };
         ws.onerror = () => {
+          flushPending();
           if (!disposed) setStatus("disconnected");
         };
         ws.onmessage = (ev) => {
@@ -141,7 +161,7 @@ const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
             term?.focus();
             onReadyRef.current?.(msg.namespace);
           } else if (msg.type === "check-result") {
-            onCheckResultRef.current?.(msg.result);
+            pendingChecksRef.current.shift()?.(msg.result);
           } else if (msg.type === "error") {
             setErrorMessage(msg.message);
           }

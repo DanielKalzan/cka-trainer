@@ -41,7 +41,7 @@ Don't run `npm run dev` and the compose stack at the same time — they share po
 
 | Command | What it does |
 |---|---|
-| `npm run cluster:up` | Create the `cka-trainer` kind cluster (1 control-plane + 2 workers, k8s pinned to the CKA exam version). Idempotent — reuses an existing cluster. |
+| `npm run cluster:up` | Create the `cka-trainer` kind cluster (1 control-plane + 2 workers, k8s pinned to the CKA exam version). Idempotent — reuses an existing cluster. Also pre-loads the exercise images onto the nodes (best-effort) so exercises never stall on a first pull. |
 | `npm run cluster:down` | Delete the cluster and its kubeconfig. |
 | `npm run cluster:reset` | Full delete + recreate. Per-exercise reset is namespace-scoped and doesn't need this — this is the nuke option. |
 

@@ -16,5 +16,8 @@ fi
 echo
 echo "Smoke test (kubectl get nodes):"
 kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes
+
+bash "$(dirname "${BASH_SOURCE[0]}")/warm-images.sh" "$KIND_BIN" "$CLUSTER_NAME"
+
 echo
 echo "Cluster ready. All app components use $KUBECONFIG_PATH — your ~/.kube/config is untouched."

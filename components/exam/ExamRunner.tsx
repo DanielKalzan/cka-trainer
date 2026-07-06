@@ -6,12 +6,11 @@ import { AlertTriangle, Award, Clock, Flag, RotateCcw } from "lucide-react";
 import { getMockExam } from "@/content/mock-exams";
 import { getDomain } from "@/lib/constants/domains";
 import { getExerciseById } from "@/lib/content/registry";
-import type { ClusterState } from "@/lib/terminal-engine/cluster-state";
-import type { TerminalExercise } from "@/lib/types/content";
+import type { CheckResult, TerminalExercise } from "@/lib/types/content";
 import { useExamStore, type ExamTaskResult } from "@/store/useExamStore";
 import DomainBadge from "@/components/DomainBadge";
 import MarkdownView from "@/components/MarkdownView";
-import Terminal from "@/components/terminal/Terminal";
+import LiveTerminal, { type LiveTerminalHandle } from "@/components/terminal/LiveTerminal";
 
 function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -42,31 +41,37 @@ function Runner({
   const [timeLeft, setTimeLeft] = useState(timeLimit);
   const [taskIndex, setTaskIndex] = useState(0);
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
+  const [grading, setGrading] = useState(false);
   const finishedRef = useRef(false);
 
-  // One cluster state per task, created lazily, survives task switching.
-  const statesRef = useRef<Record<string, { current: ClusterState }>>({});
-  function stateFor(ex: TerminalExercise): { current: ClusterState } {
-    if (!statesRef.current[ex.id]) {
-      statesRef.current[ex.id] = { current: structuredClone(ex.initialState) };
-    }
-    return statesRef.current[ex.id];
-  }
+  // One live cluster session per task, created lazily on first visit and kept
+  // mounted (hidden) while you work elsewhere — its namespace lives as long as
+  // the terminal's WebSocket does, so switching tasks preserves state.
+  const [visited, setVisited] = useState<Record<string, boolean>>({
+    [exercises[0]?.id]: true,
+  });
+  const handlesRef = useRef<Record<string, LiveTerminalHandle | null>>({});
 
-  function finish() {
+  async function finish() {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const results: ExamTaskResult[] = exercises.map((ex) => {
-      const verdict = ex.checker(stateFor(ex).current);
-      return {
-        exerciseId: ex.id,
-        domainId: ex.domainId,
-        title: ex.title,
-        points: ex.points,
-        passed: verdict.passed,
-        feedback: verdict.feedback,
-      };
-    });
+    setGrading(true);
+    const results: ExamTaskResult[] = await Promise.all(
+      exercises.map(async (ex) => {
+        const handle = handlesRef.current[ex.id];
+        const verdict: CheckResult = handle
+          ? await handle.check()
+          : { passed: false, feedback: "Not attempted — this task's environment was never opened." };
+        return {
+          exerciseId: ex.id,
+          domainId: ex.domainId,
+          title: ex.title,
+          points: ex.points,
+          passed: verdict.passed,
+          feedback: verdict.feedback,
+        };
+      }),
+    );
     const totalPoints = results.reduce((sum, r) => sum + r.points, 0);
     const earned = results.filter((r) => r.passed).reduce((sum, r) => sum + r.points, 0);
     const scorePct = totalPoints === 0 ? 0 : Math.round((earned / totalPoints) * 100);
@@ -82,6 +87,8 @@ function Runner({
       scorePct,
       passed: scorePct >= 66,
     });
+    // Navigating away unmounts every terminal → sessions close → the bridge
+    // tears down all task namespaces. Attempt-wide cleanup for free.
     router.push(`/exam/results/${attemptId}`);
   }
   const finishRef = useRef(finish);
@@ -92,7 +99,7 @@ function Runner({
       setTimeLeft((s) => {
         if (s <= 1) {
           clearInterval(t);
-          finishRef.current();
+          void finishRef.current();
           return 0;
         }
         return s - 1;
@@ -102,7 +109,6 @@ function Runner({
   }, []);
 
   const ex = exercises[taskIndex];
-  const clusterRef = stateFor(ex);
   const lowTime = timeLeft <= 300;
 
   return (
@@ -123,7 +129,10 @@ function Runner({
             return (
               <button
                 key={e.id}
-                onClick={() => setTaskIndex(i)}
+                onClick={() => {
+                  setTaskIndex(i);
+                  setVisited((v) => ({ ...v, [e.id]: true }));
+                }}
                 title={`${domain?.shortName}: ${e.title}`}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-xs transition-colors ${
                   i === taskIndex
@@ -143,12 +152,13 @@ function Runner({
         <span className="flex-1" />
         <button
           onClick={() => {
-            if (window.confirm("End the exam and grade all tasks now?")) finish();
+            if (window.confirm("End the exam and grade all tasks now?")) void finish();
           }}
-          className="flex items-center gap-1.5 rounded-lg bg-danger/90 px-4 py-1.5 text-sm font-medium text-bg transition-opacity hover:opacity-90"
+          disabled={grading}
+          className="flex items-center gap-1.5 rounded-lg bg-danger/90 px-4 py-1.5 text-sm font-medium text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           <Flag className="h-4 w-4" />
-          End exam
+          {grading ? "grading…" : "End exam"}
         </button>
       </div>
 
@@ -166,8 +176,7 @@ function Runner({
           <span className="flex-1" />
           <button
             onClick={() => {
-              if (window.confirm("Reset this task's cluster to its initial state?")) {
-                statesRef.current[ex.id] = { current: structuredClone(ex.initialState) };
+              if (window.confirm("Reset this task to its initial state? (fresh namespace)")) {
                 setResetKeys((k) => ({ ...k, [ex.id]: (k[ex.id] ?? 0) + 1 }));
               }
             }}
@@ -185,15 +194,35 @@ function Runner({
 
       <p className="flex items-center gap-2 text-xs text-faint">
         <AlertTriangle className="h-3.5 w-3.5" />
-        Exam conditions: no hints, no per-task feedback — everything is graded when you end the exam.
-        Switching tasks keeps each task&apos;s cluster state.
+        Exam conditions: no hints, no per-task feedback — everything is graded against the live
+        cluster when you end the exam. Switching tasks keeps each task&apos;s namespace alive;
+        tasks you never open count as not attempted.
       </p>
 
-      <Terminal
-        key={`${ex.id}-${resetKeys[ex.id] ?? 0}`}
-        clusterRef={clusterRef}
-        welcome={`Task ${taskIndex + 1}: connected to exam cluster.`}
-      />
+      {/* All visited terminals stay mounted (hidden) so their sessions — and
+          cluster namespaces — survive task switching. */}
+      {exercises.map((e, i) =>
+        visited[e.id] ? (
+          <div key={e.id} className={i === taskIndex ? "" : "hidden"}>
+            <LiveTerminal
+              key={resetKeys[e.id] ?? 0}
+              ref={(h) => {
+                handlesRef.current[e.id] = h;
+              }}
+              exerciseId={e.id}
+            />
+          </div>
+        ) : null,
+      )}
+
+      {grading ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80">
+          <div className="rounded-xl border border-edge bg-surface px-8 py-6 text-center">
+            <p className="font-medium">Grading all tasks against the cluster…</p>
+            <p className="mt-1 text-sm text-muted">This takes a few seconds.</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

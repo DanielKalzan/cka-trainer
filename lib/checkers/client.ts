@@ -31,6 +31,33 @@ export function appsApi(): k8s.AppsV1Api {
   return kubeConfig().makeApiClient(k8s.AppsV1Api);
 }
 
+export function rbacApi(): k8s.RbacAuthorizationV1Api {
+  return kubeConfig().makeApiClient(k8s.RbacAuthorizationV1Api);
+}
+
+export function networkingApi(): k8s.NetworkingV1Api {
+  return kubeConfig().makeApiClient(k8s.NetworkingV1Api);
+}
+
+export function autoscalingApi(): k8s.AutoscalingV2Api {
+  return kubeConfig().makeApiClient(k8s.AutoscalingV2Api);
+}
+
+export function discoveryApi(): k8s.DiscoveryV1Api {
+  return kubeConfig().makeApiClient(k8s.DiscoveryV1Api);
+}
+
+/** Ready endpoint addresses behind a Service, via EndpointSlices. */
+export async function readyEndpointCount(namespace: string, service: string): Promise<number> {
+  const slices = await discoveryApi().listNamespacedEndpointSlice({
+    namespace,
+    labelSelector: `kubernetes.io/service-name=${service}`,
+  });
+  return slices.items
+    .flatMap((s) => s.endpoints ?? [])
+    .filter((e) => e.conditions?.ready !== false).length;
+}
+
 /** Resolve to null on 404 instead of throwing — "not created yet" is a normal
  *  grading outcome, not an error. */
 export async function orNotFound<T>(promise: Promise<T>): Promise<T | null> {

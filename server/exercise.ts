@@ -25,7 +25,10 @@ export interface ExerciseSession {
 const active = new Set<string>();
 
 async function kubectl(...args: string[]): Promise<string> {
-  const { stdout } = await exec("kubectl", ["--kubeconfig", KUBECONFIG_PATH, ...args]);
+  // cwd = repo root so setup commands can `apply -f content/...` with repo-relative paths.
+  const { stdout } = await exec("kubectl", ["--kubeconfig", KUBECONFIG_PATH, ...args], {
+    cwd: REPO_ROOT,
+  });
   return stdout;
 }
 
@@ -40,9 +43,22 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
 
   const namespace = `ex-${exerciseId}-${Date.now()}`;
   await kubectl("create", "namespace", namespace);
-  await kubectl("label", "namespace", namespace, MANAGED_LABEL);
-  if (exercise.live.manifest) {
-    await kubectl("apply", "-n", namespace, "-f", path.join(REPO_ROOT, exercise.live.manifest));
+  try {
+    await kubectl("label", "namespace", namespace, MANAGED_LABEL);
+    if (exercise.live.manifest) {
+      await kubectl("apply", "-n", namespace, "-f", path.join(REPO_ROOT, exercise.live.manifest));
+    }
+    // -n is a harmless no-op for cluster-scoped commands (taint, cordon, …).
+    for (const cmd of exercise.live.setupCommands ?? []) {
+      await kubectl("-n", namespace, ...cmd);
+    }
+  } catch (err) {
+    // Half-provisioned setup: don't leave the namespace (or a node taint) behind.
+    await Promise.allSettled([
+      kubectl("delete", "namespace", namespace, "--wait=false", "--ignore-not-found"),
+      ...(exercise.live.teardownCommands ?? []).map((cmd) => kubectl(...cmd).catch(() => "")),
+    ]);
+    throw err;
   }
 
   // Per-session kubeconfig with the exercise namespace as the context default,
@@ -66,12 +82,16 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
 export async function teardownExerciseSession(session: ExerciseSession): Promise<void> {
   active.delete(session.namespace);
   fs.rmSync(session.kubeconfigPath, { force: true });
-  const cleanups = getExerciseById(session.exerciseId)?.live?.clusterScopedCleanup ?? [];
+  const live = getExerciseById(session.exerciseId)?.live;
+  const cleanups = live?.clusterScopedCleanup ?? [];
+  const restores = live?.teardownCommands ?? [];
   const results = await Promise.allSettled([
     kubectl("delete", "namespace", session.namespace, "--wait=false", "--ignore-not-found"),
     ...cleanups.map((ref) =>
       kubectl("delete", ref.kind.toLowerCase(), ref.name, "--wait=false", "--ignore-not-found"),
     ),
+    // Restores fail routinely (user already removed the taint/cordon) — ignore.
+    ...restores.map((cmd) => kubectl(...cmd).catch(() => "")),
   ]);
   for (const r of results) {
     if (r.status === "rejected") {
