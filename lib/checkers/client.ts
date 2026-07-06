@@ -6,7 +6,8 @@ import * as k8s from "@kubernetes/client-node";
  * cluster. Never import from client components.
  */
 
-const KUBECONFIG_PATH = path.resolve(__dirname, "../../.kubeconfig");
+const KUBECONFIG_PATH =
+  process.env.KUBECONFIG ?? path.resolve(__dirname, "../../.kubeconfig");
 
 let cached: k8s.KubeConfig | null = null;
 

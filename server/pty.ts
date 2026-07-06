@@ -3,7 +3,8 @@ import * as path from "path";
 import * as pty from "node-pty";
 
 export const REPO_ROOT = path.resolve(__dirname, "..");
-export const KUBECONFIG_PATH = path.join(REPO_ROOT, ".kubeconfig");
+export const KUBECONFIG_PATH =
+  process.env.KUBECONFIG ?? path.join(REPO_ROOT, ".kubeconfig");
 
 const SHELLRC = path.join(__dirname, "shellrc.sh");
 

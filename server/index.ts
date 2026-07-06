@@ -32,6 +32,17 @@ wss.on("connection", (ws, req) => {
 
 const SWEEP_INTERVAL_MS = 10 * 60_000;
 
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `[bridge] port ${PORT} is already in use — another \`npm run dev\` (or docker compose) running? ` +
+        `Stop it, or set TERMINAL_BRIDGE_PORT to a free port.`,
+    );
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`[bridge] listening on ws://${HOST}:${PORT}/term`);
   if (!fs.existsSync(KUBECONFIG_PATH)) {

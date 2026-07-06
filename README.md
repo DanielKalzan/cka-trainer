@@ -21,6 +21,22 @@ npm run dev          # frontend + terminal bridge
 
 Open http://localhost:3000.
 
+## Alternative: run everything with Docker Compose
+
+No local Node/kubectl needed — only Docker:
+
+```bash
+docker compose up --build
+```
+
+That starts a one-shot `cluster-init` service (creates or reuses the kind cluster through the host Docker socket, writes `./.kubeconfig`) and the `app` service (frontend + bridge, with kubectl/vim baked in). Both use host networking (Linux), so the URLs are the same: http://localhost:3000.
+
+- `docker compose down` stops the app but **leaves the cluster running**
+- `docker compose --profile teardown run --rm cluster-down` deletes the cluster
+- after changing `package.json`: `docker compose build app && docker compose run --rm app npm ci` (node_modules lives in a named volume)
+
+Don't run `npm run dev` and the compose stack at the same time — they share ports 3000/3001 (the bridge will tell you exactly that if it happens).
+
 ## Cluster management
 
 | Command | What it does |

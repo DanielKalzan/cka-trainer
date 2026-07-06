@@ -1,0 +1,57 @@
+# Full dev stack: kind cluster + Next.js frontend + terminal bridge.
+#
+#   docker compose up --build          start everything (creates the cluster on first run)
+#   docker compose --profile teardown run --rm cluster-down   delete the kind cluster
+#
+# Both services use the host network namespace (Linux):
+#  - cluster-init drives kind through the host Docker socket, so the kind nodes
+#    are sibling containers and the kubeconfig's 127.0.0.1 API address works.
+#  - app's bridge binds 127.0.0.1:3001, which must be the *host* loopback for
+#    the browser to reach it. Ports stay host-local; nothing is published wider.
+# `docker compose down` leaves the kind cluster running — use the teardown
+# profile (or npm run cluster:down) to delete it.
+
+services:
+  cluster-init:
+    build:
+      context: docker
+      dockerfile: cluster.Dockerfile
+      network: host
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/work
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      network: host
+    network_mode: host
+    depends_on:
+      cluster-init:
+        condition: service_completed_successfully
+    volumes:
+      - .:/app
+      # Named volumes shadow the bind mount: node_modules keeps the
+      # container-built node-pty; .next keeps dev builds off the host tree.
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    environment:
+      KUBECONFIG: /app/.kubeconfig
+
+  cluster-down:
+    profiles: ["teardown"]
+    build:
+      context: docker
+      dockerfile: cluster.Dockerfile
+      network: host
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["kind", "delete", "cluster", "--name", "cka-trainer"]
+
+volumes:
+  node_modules:
+  next_cache:
