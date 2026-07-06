@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  integration-test:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: cka-trainer
+          config: kind-config.yaml
+
+      - name: Export kubeconfig
+        run: kind get kubeconfig --name cka-trainer > .kubeconfig
+
+      - name: Warm exercise images (best-effort)
+        run: bash scripts/cluster/warm-images.sh "$(command -v kind)" cka-trainer
+
+      - name: Start terminal bridge
+        run: |
+          KUBECONFIG="$PWD/.kubeconfig" npx tsx server/index.ts > bridge.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3001 > /dev/null && exit 0
+            sleep 1
+          done
+          echo "bridge did not come up in time" >&2
+          cat bridge.log >&2
+          exit 1
+
+      - name: Smoke test (real shell + real checker against the real cluster)
+        run: node scripts/ci/smoke-test.mjs
+        env:
+          KUBECONFIG: ${{ github.workspace }}/.kubeconfig
+
+      - name: Bridge log
+        if: always()
+        run: cat bridge.log || true
+
+  release:
+    needs: [validate, integration-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/app.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/app:${{ env.VERSION }}
+            ghcr.io/${{ github.repository }}/app:latest

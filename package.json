@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
     "cluster:up": "bash scripts/cluster/up.sh",
     "cluster:down": "bash scripts/cluster/down.sh",
