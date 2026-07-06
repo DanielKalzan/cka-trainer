@@ -15,12 +15,14 @@ const pvPvcPod: TerminalExercise = {
   id: "st-ex-pv-pvc-pod",
   domainId: "storage",
   title: "Wire a pod to persistent storage",
-  scenario: `An app must persist its logs on \`node01\`'s local disk under \`/mnt/logs\`.
+  scenario: `An app must persist its logs on a node's local disk under \`/mnt/logs\`.
 
 **Task:**
 1. Create a PersistentVolume \`pv-logs\`: capacity \`1Gi\`, access mode \`ReadWriteOnce\`, storageClassName \`manual\`, hostPath \`/mnt/logs\`.
-2. Create a PersistentVolumeClaim \`logs-claim\` in \`default\`: request \`500Mi\`, \`ReadWriteOnce\`, storageClassName \`manual\`.
-3. Create a pod \`log-writer\` (image \`busybox:1.36\`) that mounts the claim at \`/var/log/app\`.`,
+2. Create a PersistentVolumeClaim \`logs-claim\`: request \`500Mi\`, \`ReadWriteOnce\`, storageClassName \`manual\`.
+3. Create a pod \`log-writer\` (image \`busybox:1.36\`) that mounts the claim at \`/var/log/app\`.
+
+(Work in the terminal's default namespace — no \`-n\` needed.)`,
   initialState: baseState(),
   hints: [
     "All three are YAML (kubectl apply -f - and paste; separate docs with ---). PVs have no imperative create.",
@@ -42,7 +44,6 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: logs-claim
-  namespace: default
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: manual
@@ -129,6 +130,9 @@ spec:
         "Full chain: PV (disk) ← PVC (request) ← pod (mount). The class name matching on both sides is what makes the binding deterministic.",
     };
   },
+  live: {
+    clusterScopedCleanup: [{ kind: "PersistentVolume", name: "pv-logs" }],
+  },
   timeBudgetSeconds: 540,
   points: 100,
   difficulty: "medium",
@@ -146,7 +150,7 @@ const storageClassClaim: TerminalExercise = {
 
 **Task:**
 1. Create a StorageClass \`fast-local\`: provisioner \`kubernetes.io/no-provisioner\`, volumeBindingMode \`WaitForFirstConsumer\`, allowVolumeExpansion \`true\`.
-2. Create a PVC \`cache-claim\` in \`default\` requesting \`2Gi\`, \`ReadWriteOnce\`, using that class.
+2. Create a PVC \`cache-claim\` requesting \`2Gi\`, \`ReadWriteOnce\`, using that class.
 
 The claim staying \`Pending\` afterwards is expected — no pod consumes it yet.`,
   initialState: baseState(),
@@ -166,7 +170,6 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: cache-claim
-  namespace: default
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: fast-local
@@ -208,6 +211,9 @@ spec:
       feedback:
         "Class + claim done. The claim will sit Pending until a pod consumes it — with WaitForFirstConsumer that's correct behavior, not a bug.",
     };
+  },
+  live: {
+    clusterScopedCleanup: [{ kind: "StorageClass", name: "fast-local" }],
   },
   timeBudgetSeconds: 420,
   points: 80,

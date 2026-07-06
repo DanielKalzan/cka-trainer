@@ -49,20 +49,45 @@ export interface CheckResult {
 
 export type ExerciseDifficulty = "easy" | "medium" | "hard";
 
+/** Cluster-scoped objects an exercise leads the user to create — namespace
+ *  deletion won't remove these, so the session teardown deletes them by name. */
+export interface ClusterScopedRef {
+  kind: "PersistentVolume" | "StorageClass" | "ClusterRole" | "ClusterRoleBinding";
+  name: string;
+}
+
+/**
+ * Marks an exercise as running against the real kind cluster. The bridge
+ * creates a dedicated namespace per session; the checker for this exercise id
+ * lives server-side in /lib/checkers (content stays client-importable).
+ */
+export interface LiveExerciseConfig {
+  /** Setup manifest applied into the session namespace, path relative to repo root. */
+  manifest?: string;
+  /** Node-level scenario id under /scripts/scenarios (setup/teardown scripts). */
+  scenario?: string;
+  clusterScopedCleanup?: ClusterScopedRef[];
+}
+
 export interface TerminalExercise {
   id: string;
   domainId: DomainId;
   title: string;
   /** Exam-style task text (markdown). */
   scenario: string;
+  /** @deprecated sim-terminal state — removed once all domains + exam run live. */
   initialState: ClusterState;
   /** Progressively more revealing. Index 0 is cheapest; last entry is the full solution. */
   hints: string[];
   /**
    * Grades the RESULTING cluster state — never string-match typed commands;
    * troubleshooting tasks have multiple valid solution paths.
+   * @deprecated sim checker — live exercises are graded server-side via /lib/checkers.
    */
   checker: (state: ClusterState) => CheckResult;
+  /** Present once the exercise is migrated to the real cluster (practice mode
+   *  uses it; the mock exam keeps the sim path until its own migration step). */
+  live?: LiveExerciseConfig;
   /** Pacing feedback: "real exam gives you ~N min for this". */
   timeBudgetSeconds: number;
   points: number;

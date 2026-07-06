@@ -7,7 +7,11 @@ export const KUBECONFIG_PATH = path.join(REPO_ROOT, ".kubeconfig");
 
 const SHELLRC = path.join(__dirname, "shellrc.sh");
 
-export function spawnShell(cols: number, rows: number): pty.IPty {
+export function spawnShell(
+  cols: number,
+  rows: number,
+  kubeconfigPath: string = KUBECONFIG_PATH,
+): pty.IPty {
   return pty.spawn("bash", ["--rcfile", SHELLRC, "-i"], {
     name: "xterm-256color",
     cols,
@@ -15,7 +19,7 @@ export function spawnShell(cols: number, rows: number): pty.IPty {
     cwd: os.homedir(),
     env: {
       ...process.env,
-      KUBECONFIG: KUBECONFIG_PATH,
+      KUBECONFIG: kubeconfigPath,
       EDITOR: "vim",
       KUBE_EDITOR: "vim",
       // Repo-local ./bin first so an auto-downloaded kind is reachable in-session.

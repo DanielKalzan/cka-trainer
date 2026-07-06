@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as http from "http";
 import { WebSocketServer } from "ws";
 import { attachSession } from "./session";
+import { sweepOrphanNamespaces } from "./exercise";
 import { KUBECONFIG_PATH } from "./pty";
 
 const PORT = Number(process.env.TERMINAL_BRIDGE_PORT ?? 3001);
@@ -24,8 +25,12 @@ wss.on("connection", (ws, req) => {
     ws.close(1008, "origin not allowed");
     return;
   }
-  attachSession(ws);
+  const url = new URL(req.url ?? "/term", "http://localhost");
+  const exerciseId = url.searchParams.get("exercise") ?? undefined;
+  void attachSession(ws, exerciseId);
 });
+
+const SWEEP_INTERVAL_MS = 10 * 60_000;
 
 server.listen(PORT, HOST, () => {
   console.log(`[bridge] listening on ws://${HOST}:${PORT}/term`);
@@ -34,4 +39,6 @@ server.listen(PORT, HOST, () => {
       `[bridge] warning: ${KUBECONFIG_PATH} not found — run \`npm run cluster:up\` or kubectl will have no cluster to talk to`,
     );
   }
+  void sweepOrphanNamespaces();
+  setInterval(() => void sweepOrphanNamespaces(), SWEEP_INTERVAL_MS);
 });

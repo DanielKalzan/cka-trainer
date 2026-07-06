@@ -8,7 +8,11 @@
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": ["**/*.ts"]
 }
