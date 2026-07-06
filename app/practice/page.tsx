@@ -12,7 +12,7 @@ export default function PracticePage() {
     <>
       <PageHeader
         title="Practice Sandbox"
-        subtitle="Free-form kubectl terminal against a fake cluster. No grading, no stakes."
+        subtitle="Free-form kubectl terminal against a real local kind cluster. No grading, no stakes."
       />
       <SandboxTerminal />
 
