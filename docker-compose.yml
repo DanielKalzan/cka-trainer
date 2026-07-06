@@ -6,8 +6,11 @@
 # Both services use the host network namespace (Linux):
 #  - cluster-init drives kind through the host Docker socket, so the kind nodes
 #    are sibling containers and the kubeconfig's 127.0.0.1 API address works.
-#  - app's bridge binds 127.0.0.1:3001, which must be the *host* loopback for
-#    the browser to reach it. Ports stay host-local; nothing is published wider.
+#  - app's bridge binds 0.0.0.0:3001 so it's reachable via the host's LAN IP too
+#    (not just localhost) — it gates connections by Origin instead (see
+#    server/index.ts). That means anyone on the same LAN who can reach this
+#    port gets a real shell into the cluster; fine on a trusted home network,
+#    not on shared/public wifi.
 # `docker compose down` leaves the kind cluster running — use the teardown
 # profile (or npm run cluster:down) to delete it.
 

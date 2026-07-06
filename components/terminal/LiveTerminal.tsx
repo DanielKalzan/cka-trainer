@@ -12,8 +12,15 @@ import type { CheckResult } from "@/lib/types/content";
 import type { ServerControlMessage } from "@/lib/types/terminal-protocol";
 import "@xterm/xterm/css/xterm.css";
 
-const WS_URL =
-  process.env.NEXT_PUBLIC_TERMINAL_WS_URL ?? "ws://127.0.0.1:3001/term";
+/** Same host the page itself was loaded from (localhost, a LAN IP, whatever) —
+ *  a hardcoded 127.0.0.1 only resolves on the machine running the browser,
+ *  which breaks the moment the app is reached via anything but localhost. */
+function wsUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_TERMINAL_WS_URL ??
+    `ws://${window.location.hostname}:3001/term`
+  );
+}
 
 type ConnectionStatus = "connecting" | "provisioning" | "connected" | "disconnected";
 
@@ -108,9 +115,10 @@ const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
         term.open(el);
         fit.fit();
 
+        const base = wsUrl();
         const url = exerciseId
-          ? `${WS_URL}?exercise=${encodeURIComponent(exerciseId)}`
-          : WS_URL;
+          ? `${base}?exercise=${encodeURIComponent(exerciseId)}`
+          : base;
         ws = new WebSocket(url);
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
