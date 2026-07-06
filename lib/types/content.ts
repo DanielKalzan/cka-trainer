@@ -1,5 +1,4 @@
 import type { DomainId } from "@/lib/constants/domains";
-import type { ClusterState } from "@/lib/terminal-engine/cluster-state";
 
 /**
  * Content model. Everything here is data — adding content never requires
@@ -89,20 +88,14 @@ export interface TerminalExercise {
   title: string;
   /** Exam-style task text (markdown). */
   scenario: string;
-  /** @deprecated sim-terminal state — only the etcd exercise still carries it
-   *  (converts in the scenario-scripts step); removed with the sim engine. */
-  initialState?: ClusterState;
   /** Progressively more revealing. Index 0 is cheapest; last entry is the full solution. */
   hints: string[];
   /**
-   * Grades the RESULTING cluster state — never string-match typed commands;
-   * troubleshooting tasks have multiple valid solution paths.
-   * @deprecated sim checker — live exercises are graded server-side via /lib/checkers.
+   * Session setup on the real cluster. Grading lives server-side in
+   * /lib/checkers keyed by exercise id — checkers grade the RESULTING cluster
+   * state, never the typed commands (multiple valid solution paths).
    */
-  checker?: (state: ClusterState) => CheckResult;
-  /** Present once the exercise is migrated to the real cluster (practice mode
-   *  uses it; the mock exam keeps the sim path until its own migration step). */
-  live?: LiveExerciseConfig;
+  live: LiveExerciseConfig;
   /** Pacing feedback: "real exam gives you ~N min for this". */
   timeBudgetSeconds: number;
   points: number;

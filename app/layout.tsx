@@ -19,7 +19,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "CKA Trainer",
   description:
-    "Gamified CKA exam prep with a simulated kubectl terminal.",
+    "Gamified CKA exam prep with a real kubectl terminal on a local kind cluster.",
 };
 
 export default function RootLayout({

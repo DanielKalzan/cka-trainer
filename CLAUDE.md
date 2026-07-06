@@ -50,7 +50,7 @@ Passing threshold: 66%.
 - `kubectl` output is now real terminal output via PTY — no formatting logic needed for `get`/`describe`, that's the whole point.
 
 ## Migration status
-The terminal engine was migrated from an in-memory simulation to a real `kind` cluster — see `MIGRATION_PROMPT.md` for the full plan and rationale (the simulation couldn't reliably reproduce `--dry-run=client`, reconciliation behavior, immutability rules, etc). Follow the migration order in that doc; don't re-introduce in-memory cluster state.
+**Complete.** The in-memory simulation (`lib/terminal-engine/`, sim `Terminal.tsx`) is deleted; every exercise and the mock exam run against the real `kind` cluster. `MIGRATION_PROMPT.md` stays as the historical record of why (the simulation couldn't reliably reproduce `--dry-run=client`, reconciliation behavior, immutability rules, etc). **Don't re-introduce in-memory cluster state.** Regression harnesses: `scripts/dev/e2e-live-exercises.mjs` (per-exercise solve/grade cycle) and `scripts/dev/e2e-exam.mjs` (concurrent exam-session load) — run them against a live bridge after touching the terminal/exercise layer.
 
 ## Verification
-After each migration step: manually verify the terminal behavior in the browser (not just `npm run build` passing) before moving to the next step — this migration is specifically about closing gaps between "looks right" and "behaves right." Commit to git at the end of each clean step.
+For terminal/exercise changes: verify behavior in the browser and/or the e2e harnesses above, not just `npm run build` — "looks right" and "behaves right" differ. New exercise images must be added to `scripts/cluster/exercise-images.txt` (registry pulls are slow here; nodes are pre-warmed). Commit at the end of each clean step.
