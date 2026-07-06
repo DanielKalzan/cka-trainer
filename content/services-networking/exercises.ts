@@ -97,6 +97,30 @@ spec:
   difficulty: "hard",
 };
 
-const exercises: TerminalExercise[] = [exposeDeployment, nodePortService, netpolWebToDb];
+// ---------------------------------------------------------------------------
+// 4. NetworkPolicy accidentally blocking required traffic
+// ---------------------------------------------------------------------------
+
+const netpolFix: TerminalExercise = {
+  id: "sn-ex-netpol-fix",
+  domainId: "services-networking",
+  title: "backend-allow is blocking backend's own traffic",
+  scenario: `\`backend\` moved from port 80 to port 8080 last release, but the \`backend-allow\` NetworkPolicy still only opens port 80 — frontend's requests to \`backend-svc\` are being silently dropped by the policy.
+
+**Task:** Fix \`backend-allow\` so frontend can reach backend on its real port (8080), without opening anything wider.`,
+  hints: [
+    "The Deployment/Service already listen on 8080 — check what port the NetworkPolicy actually allows (kubectl describe netpol backend-allow).",
+    "Edit the existing ingress rule's ports for TCP 8080 — keep the podSelector scoped to app=frontend, don't loosen it to allow-all.",
+    "Full solution:\nkubectl edit networkpolicy backend-allow\n# change spec.ingress[0].ports[0].port from 80 to 8080",
+  ],
+  live: {
+    manifest: "content/services-networking/manifests/netpol-fix.yaml",
+  },
+  timeBudgetSeconds: 360,
+  points: 90,
+  difficulty: "medium",
+};
+
+const exercises: TerminalExercise[] = [exposeDeployment, nodePortService, netpolWebToDb, netpolFix];
 
 export default exercises;

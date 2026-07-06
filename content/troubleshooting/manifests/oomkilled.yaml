@@ -1,0 +1,39 @@
+# Deliberately too-low memory limit — the container grows to a fixed ~128Mi
+# working set (a doubling loop, not an unbounded leak) and gets OOMKilled
+# (exit code 137) before it ever stabilizes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache-warmer
+  labels:
+    app: cache-warmer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cache-warmer
+  template:
+    metadata:
+      labels:
+        app: cache-warmer
+    spec:
+      containers:
+        - name: cache-warmer
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              x=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+              i=0
+              while [ $i -lt 22 ]; do
+                x="$x$x"
+                i=$((i+1))
+              done
+              echo "cache warmed, holding ~128Mi"
+              sleep 86400
+          resources:
+            requests:
+              memory: "32Mi"
+            limits:
+              memory: "32Mi"

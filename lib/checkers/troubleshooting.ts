@@ -1,6 +1,14 @@
 import type { CheckResult } from "@/lib/types/content";
 import { NODES } from "@/lib/constants/cluster";
-import { appsApi, coreApi, orNotFound, readyEndpointCount } from "./client";
+import {
+  appsApi,
+  authorizationApi,
+  coreApi,
+  networkingApi,
+  orNotFound,
+  parseMemoryBytes,
+  readyEndpointCount,
+} from "./client";
 
 export async function checkImagePull(namespace: string): Promise<CheckResult> {
   const dep = await orNotFound(appsApi().readNamespacedDeployment({ name: "web", namespace }));
@@ -138,5 +146,110 @@ export async function checkTaintPending(namespace: string): Promise<CheckResult>
     passed: true,
     feedback:
       "Taint gone, and the scheduler placed the Pending pods by itself — no pod deletion needed. taint <node> <key>- to remove is worth having in muscle memory.",
+  };
+}
+
+export async function checkOomKilled(namespace: string): Promise<CheckResult> {
+  const dep = await orNotFound(appsApi().readNamespacedDeployment({ name: "cache-warmer", namespace }));
+  if (!dep) {
+    return { passed: false, feedback: "Deployment cache-warmer is gone — the task was to fix it, not remove it." };
+  }
+  const container = dep.spec?.template.spec?.containers.find((c) => c.name === "cache-warmer");
+  const limit = container?.resources?.limits?.memory;
+  if (!limit || parseMemoryBytes(limit) < 350 * 1024 * 1024) {
+    return {
+      passed: false,
+      feedback: `cache-warmer's memory limit is still ${limit ?? "unset"} — its real footprint (including the transient peak while it warms up) needs meaningfully more room than that. Raise resources.limits.memory to at least 512Mi.`,
+    };
+  }
+  if ((dep.status?.readyReplicas ?? 0) < 1) {
+    return {
+      passed: false,
+      feedback:
+        "Memory limit raised ✓ — but the pod isn't Ready yet (the old one may still be restarting). Watch kubectl get pods and re-check.",
+    };
+  }
+  return {
+    passed: true,
+    feedback: "cache-warmer is stable with real headroom above its working set — no more OOMKills.",
+  };
+}
+
+export async function checkRbacForbidden(namespace: string): Promise<CheckResult> {
+  const sa = await orNotFound(coreApi().readNamespacedServiceAccount({ name: "deploy-bot", namespace }));
+  if (!sa) {
+    return { passed: false, feedback: "ServiceAccount deploy-bot is gone — fix its Role, don't remove anything." };
+  }
+  const review = await authorizationApi().createSubjectAccessReview({
+    body: {
+      apiVersion: "authorization.k8s.io/v1",
+      kind: "SubjectAccessReview",
+      spec: {
+        user: `system:serviceaccount:${namespace}:deploy-bot`,
+        resourceAttributes: {
+          namespace,
+          verb: "update",
+          group: "apps",
+          resource: "deployments",
+        },
+      },
+    },
+  });
+  if (!review.status?.allowed) {
+    return {
+      passed: false,
+      feedback:
+        "deploy-bot still can't update deployments (checked live via a SubjectAccessReview, same as kubectl auth can-i). Its Role only grants get/list on pods — broaden it to cover deployments.",
+    };
+  }
+  return {
+    passed: true,
+    feedback: `kubectl auth can-i update deployments --as=system:serviceaccount:${namespace}:deploy-bot now says yes — graded via a live SubjectAccessReview, exactly what the real authorizer checks.`,
+  };
+}
+
+export async function checkCoreDnsNetpol(namespace: string): Promise<CheckResult> {
+  const np = await orNotFound(networkingApi().readNamespacedNetworkPolicy({ name: "deny-egress", namespace }));
+  if (!np) {
+    return {
+      passed: false,
+      feedback: "NetworkPolicy deny-egress is gone — add an egress rule to it rather than deleting it.",
+    };
+  }
+  const rules = np.spec?.egress ?? [];
+  const dnsRule = rules.find((r) => {
+    const toKubeSystem = (r.to ?? []).some(
+      (peer) => peer.namespaceSelector?.matchLabels?.["kubernetes.io/metadata.name"] === "kube-system",
+    );
+    const hasUdp53 = (r.ports ?? []).some((p) => (p.protocol ?? "TCP") === "UDP" && Number(p.port) === 53);
+    const hasTcp53 = (r.ports ?? []).some((p) => (p.protocol ?? "TCP") === "TCP" && Number(p.port) === 53);
+    return toKubeSystem && hasUdp53 && hasTcp53;
+  });
+  if (!dnsRule) {
+    return {
+      passed: false,
+      feedback:
+        "No egress rule yet permits both UDP/53 and TCP/53 to kube-system. CoreDNS listens on both protocols — allow both, scoped to kube-system via a namespaceSelector.",
+    };
+  }
+  return {
+    passed: true,
+    feedback:
+      "deny-egress now carves out DNS to kube-system while leaving everything else blocked — the least-privilege fix for a NetworkPolicy that over-blocked required traffic.",
+  };
+}
+
+export async function checkNodeCordoned(): Promise<CheckResult> {
+  const node = await orNotFound(coreApi().readNode({ name: NODES.worker2 }));
+  if (!node) return { passed: false, feedback: `${NODES.worker2} is missing — that's not the task.` };
+  if (node.spec?.unschedulable) {
+    return {
+      passed: false,
+      feedback: `${NODES.worker2} is still cordoned (SchedulingDisabled). kubectl uncordon it.`,
+    };
+  }
+  return {
+    passed: true,
+    feedback: `${NODES.worker2} is schedulable again. cordon/uncordon only ever flips spec.unschedulable — no taint, no eviction, which is exactly why it's easy to leave behind.`,
   };
 }

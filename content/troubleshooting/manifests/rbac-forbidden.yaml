@@ -1,0 +1,27 @@
+# deploy-bot can only get/list pods — but the CI job it powers needs to update
+# Deployments. The RoleBinding is fine; the Role's rule is simply too narrow.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-bot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploy-bot-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploy-bot-binding
+subjects:
+  - kind: ServiceAccount
+    name: deploy-bot
+roleRef:
+  kind: Role
+  name: deploy-bot-role
+  apiGroup: rbac.authorization.k8s.io

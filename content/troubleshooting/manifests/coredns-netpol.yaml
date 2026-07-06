@@ -1,0 +1,24 @@
+# A blanket deny-all-egress NetworkPolicy (meant to lock this namespace down)
+# also blocks DNS lookups to CoreDNS in kube-system — nothing here can resolve
+# any name at all, including Services in its own namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  labels:
+    app: client
+spec:
+  containers:
+    - name: client
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 86400"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-egress
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress: []

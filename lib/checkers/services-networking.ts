@@ -130,3 +130,48 @@ export async function checkNetpol(namespace: string): Promise<CheckResult> {
       "db is now default-deny with a single web-only, port-5432 opening — batch is locked out. (kind's default CNI doesn't enforce policies, but the object is exactly what the exam grades.)",
   };
 }
+
+export async function checkNetpolFix(namespace: string): Promise<CheckResult> {
+  const np = await orNotFound(
+    networkingApi().readNamespacedNetworkPolicy({ name: "backend-allow", namespace }),
+  );
+  if (!np) return { passed: false, feedback: "NetworkPolicy backend-allow is gone — fix it, don't delete it." };
+  if (np.spec?.podSelector?.matchLabels?.app !== "backend") {
+    return { passed: false, feedback: "spec.podSelector must still protect the backend pods (app=backend)." };
+  }
+  const rules = np.spec?.ingress ?? [];
+  // client-node's codegen renames the YAML `from` field to `_from`.
+  const rule = rules.find((r) =>
+    ((r._from ?? []) as NetpolPeer[]).some((f) => f.podSelector?.matchLabels?.app === "frontend"),
+  );
+  if (!rule) {
+    return {
+      passed: false,
+      feedback:
+        "No ingress rule allows pods labeled app=frontend anymore — don't remove that selector, just fix its port.",
+    };
+  }
+  const portOk = (rule.ports ?? []).some(
+    (p) => portNum(p.port) === 8080 && (!p.protocol || p.protocol === "TCP"),
+  );
+  if (!portOk) {
+    return {
+      passed: false,
+      feedback: "backend-allow still doesn't open TCP 8080 — backend moved off port 80 last release.",
+    };
+  }
+  const tooOpen = ((rule._from ?? []) as NetpolPeer[]).some(
+    (f) => !f.podSelector && !f.namespaceSelector,
+  );
+  if (tooOpen) {
+    return {
+      passed: false,
+      feedback: "One of the from entries has no selector at all — that allows everyone, not just frontend.",
+    };
+  }
+  return {
+    passed: true,
+    feedback:
+      "backend-allow now matches backend's real port (8080) while still scoped to frontend only — the fix was narrowing the gap, not opening the policy wide.",
+  };
+}

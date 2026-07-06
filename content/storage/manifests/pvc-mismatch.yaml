@@ -1,0 +1,33 @@
+# storageClassName on the PVC has a typo ("locall") — it can never match the
+# StorageClass ("local") or bind to the PV, even though everything else lines up.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-cache
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local
+  hostPath:
+    path: /mnt/cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cache-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: locall
+  resources:
+    requests:
+      storage: 500Mi

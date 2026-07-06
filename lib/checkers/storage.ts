@@ -128,3 +128,41 @@ export async function checkStorageClassClaim(namespace: string): Promise<CheckRe
       "Class + claim done. The claim sits Pending until a pod consumes it — with WaitForFirstConsumer that's correct behavior, not a bug (you can see it live: kubectl get pvc).",
   };
 }
+
+export async function checkPvcMismatch(namespace: string): Promise<CheckResult> {
+  const core = coreApi();
+
+  const sc = await orNotFound(storageApi().readStorageClass({ name: "local" }));
+  if (!sc) {
+    return { passed: false, feedback: "StorageClass local is gone — the task was to fix the PVC, not remove the class." };
+  }
+  const pv = await orNotFound(core.readPersistentVolume({ name: "pv-cache" }));
+  if (!pv) {
+    return { passed: false, feedback: "PersistentVolume pv-cache is gone — the task was to fix the PVC, not remove the PV." };
+  }
+
+  const pvc = await orNotFound(core.readNamespacedPersistentVolumeClaim({ name: "cache-pvc", namespace }));
+  if (!pvc) {
+    return {
+      passed: false,
+      feedback: "PVC cache-pvc doesn't exist — storageClassName is immutable, so fixing this means delete + recreate, not edit.",
+    };
+  }
+  if (pvc.spec?.storageClassName !== "local") {
+    return {
+      passed: false,
+      feedback: `cache-pvc still requests storageClassName ${pvc.spec?.storageClassName ?? "unset"} — it needs to match the StorageClass exactly: local.`,
+    };
+  }
+  if (pvc.status?.phase !== "Bound") {
+    return {
+      passed: false,
+      feedback: "storageClassName fixed ✓ — but it isn't Bound yet. Binding takes a moment; re-check (kubectl get pvc cache-pvc).",
+    };
+  }
+  return {
+    passed: true,
+    feedback:
+      "cache-pvc now matches the StorageClass exactly and is Bound to pv-cache. storageClassName is immutable — delete+recreate was the only path, not edit.",
+  };
+}

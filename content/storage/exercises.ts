@@ -114,6 +114,47 @@ spec:
   difficulty: "medium",
 };
 
-const exercises: TerminalExercise[] = [pvPvcPod, storageClassClaim];
+// ---------------------------------------------------------------------------
+// 3. PVC stuck Pending from a StorageClass name mismatch
+// ---------------------------------------------------------------------------
+
+const pvcMismatch: TerminalExercise = {
+  id: "st-ex-pvc-mismatch",
+  domainId: "storage",
+  title: "cache-pvc has sat Pending since it was created",
+  scenario: `\`cache-pvc\` has sat \`Pending\` since it was created. A StorageClass \`local\` and a matching PersistentVolume \`pv-cache\` both already exist and should satisfy it.
+
+**Task:** Find the mismatch and fix the PVC so it binds. Don't touch the StorageClass or the PV.`,
+  hints: [
+    "kubectl describe pvc cache-pvc — compare its storageClassName against kubectl get storageclass, character-for-character.",
+    "storageClassName is immutable once a PVC is created — kubectl edit won't let you change it. Delete cache-pvc and recreate it with the correct value.",
+    `Full solution:
+kubectl delete pvc cache-pvc
+kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cache-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local
+  resources:
+    requests:
+      storage: 500Mi`,
+  ],
+  live: {
+    manifest: "content/storage/manifests/pvc-mismatch.yaml",
+    clusterScopedCleanup: [
+      { kind: "StorageClass", name: "local" },
+      { kind: "PersistentVolume", name: "pv-cache" },
+    ],
+  },
+  timeBudgetSeconds: 360,
+  points: 90,
+  difficulty: "medium",
+};
+
+const exercises: TerminalExercise[] = [pvPvcPod, storageClassClaim, pvcMismatch];
 
 export default exercises;

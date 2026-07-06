@@ -4,15 +4,20 @@ import {
   checkNodeMaintenance,
   checkRbacCi,
 } from "./cluster-architecture";
-import { checkExpose, checkNetpol, checkNodePort } from "./services-networking";
-import { checkPvPvcPod, checkStorageClassClaim } from "./storage";
+import { checkExpose, checkNetpol, checkNetpolFix, checkNodePort } from "./services-networking";
+import { checkPvcMismatch, checkPvPvcPod, checkStorageClassClaim } from "./storage";
 import {
+  checkCoreDnsNetpol,
   checkCrashLoop,
   checkImagePull,
+  checkNodeCordoned,
+  checkOomKilled,
+  checkRbacForbidden,
   checkSvcSelector,
   checkTaintPending,
 } from "./troubleshooting";
 import {
+  checkAffinityPending,
   checkDedicatedNode,
   checkRollback,
   checkScaleAutoscale,
@@ -33,15 +38,22 @@ const CHECKERS: Record<string, LiveChecker> = {
   "sn-ex-expose": checkExpose,
   "sn-ex-nodeport": checkNodePort,
   "sn-ex-netpol": checkNetpol,
+  "sn-ex-netpol-fix": checkNetpolFix,
   "st-ex-pv-pvc-pod": checkPvPvcPod,
   "st-ex-storageclass": checkStorageClassClaim,
+  "st-ex-pvc-mismatch": checkPvcMismatch,
   "ts-ex-imagepull": checkImagePull,
   "ts-ex-crashloop": checkCrashLoop,
   "ts-ex-svc-selector": checkSvcSelector,
   "ts-ex-taint-pending": checkTaintPending,
+  "ts-ex-oomkilled": checkOomKilled,
+  "ts-ex-rbac-forbidden": checkRbacForbidden,
+  "ts-ex-coredns-netpol": checkCoreDnsNetpol,
+  "ts-ex-node-cordoned": checkNodeCordoned,
   "ws-ex-rollback": checkRollback,
   "ws-ex-scale-autoscale": checkScaleAutoscale,
   "ws-ex-dedicated-node": checkDedicatedNode,
+  "ws-ex-affinity-pending": checkAffinityPending,
 };
 
 export function getLiveChecker(exerciseId: string): LiveChecker | undefined {

@@ -105,6 +105,40 @@ spec:
   difficulty: "hard",
 };
 
-const exercises: TerminalExercise[] = [badReleaseRollback, scaleAndAutoscale, dedicatedCacheNode];
+// ---------------------------------------------------------------------------
+// 4. Pod Pending from an unsatisfiable nodeAffinity rule
+// ---------------------------------------------------------------------------
+
+const affinityPending: TerminalExercise = {
+  id: "ws-ex-affinity-pending",
+  domainId: "workloads-scheduling",
+  title: "indexer pods stuck Pending",
+  scenario: `Both replicas of the \`indexer\` Deployment sit \`Pending\`. \`kubectl describe pod\` shows a \`FailedScheduling\` event naming a node affinity rule that nothing currently satisfies.
+
+**Task:** Get both replicas Running. Don't touch the Deployment's affinity rule — the fix is on the cluster side (label the node the workload actually needs).`,
+  hints: [
+    "kubectl describe pod <pending pod> — the FailedScheduling event names the exact key/value it's looking for (disktype=ssd).",
+    "No node currently carries that label (kubectl get nodes --show-labels). Add it to any node.",
+    `Full solution:\nkubectl label node ${NODES.worker} disktype=ssd`,
+  ],
+  live: {
+    manifest: "content/workloads-scheduling/manifests/affinity-pending.yaml",
+    teardownCommands: [
+      ["label", "node", NODES.controlPlane, "disktype-"],
+      ["label", "node", NODES.worker, "disktype-"],
+      ["label", "node", NODES.worker2, "disktype-"],
+    ],
+  },
+  timeBudgetSeconds: 300,
+  points: 80,
+  difficulty: "medium",
+};
+
+const exercises: TerminalExercise[] = [
+  badReleaseRollback,
+  scaleAndAutoscale,
+  dedicatedCacheNode,
+  affinityPending,
+];
 
 export default exercises;

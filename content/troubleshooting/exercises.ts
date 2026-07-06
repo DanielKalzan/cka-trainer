@@ -108,6 +108,128 @@ const taintPending: TerminalExercise = {
   difficulty: "medium",
 };
 
-const exercises: TerminalExercise[] = [imagePullBackOff, crashLoop, svcSelector, taintPending];
+// ---------------------------------------------------------------------------
+// 5. OOMKilled — memory limit too low for the app's real footprint
+// ---------------------------------------------------------------------------
+
+const oomKilled: TerminalExercise = {
+  id: "ts-ex-oomkilled",
+  domainId: "troubleshooting",
+  title: "cache-warmer keeps getting OOMKilled",
+  scenario: `The \`cache-warmer\` Deployment restarts endlessly. \`kubectl describe pod\` shows \`Last State: Terminated, Reason: OOMKilled, Exit Code: 137\`.
+
+**Task:** Give it enough memory headroom to stay Running. It briefly spikes well above its ~128Mi steady-state size while warming up — size the limit for that spike, not just the steady state.`,
+  hints: [
+    "kubectl describe pod <name> — check the Last State block and the container's current resources.limits.memory.",
+    "137 = SIGKILL from the kernel OOM killer: the limit is below what the app actually needs at its peak, not just once it settles. Raise resources.limits.memory generously — try 512Mi.",
+    "Full solution:\nkubectl set resources deployment/cache-warmer --limits=memory=512Mi",
+  ],
+  live: {
+    manifest: "content/troubleshooting/manifests/oomkilled.yaml",
+  },
+  timeBudgetSeconds: 300,
+  points: 80,
+  difficulty: "medium",
+};
+
+// ---------------------------------------------------------------------------
+// 6. RBAC-denied kubectl action — Role too narrow for what the SA needs
+// ---------------------------------------------------------------------------
+
+const rbacForbidden: TerminalExercise = {
+  id: "ts-ex-rbac-forbidden",
+  domainId: "troubleshooting",
+  title: "CI's ServiceAccount gets Forbidden",
+  scenario: `The CI pipeline's ServiceAccount \`deploy-bot\` gets \`Forbidden\` when it tries to update Deployments as part of a release.
+
+**Task:** Find out why and fix it so \`deploy-bot\` can update Deployments. Its RoleBinding is already correct — don't touch it.`,
+  hints: [
+    "kubectl auth can-i update deployments --as=system:serviceaccount:<ns>:deploy-bot — reproduce the Forbidden before changing anything. Your session namespace: kubectl config view --minify -o jsonpath='{..namespace}'",
+    "The RoleBinding is fine. Edit the Role's rules to add apps/deployments with the verbs it needs (get, list, update at least).",
+    `Full solution:
+kubectl edit role deploy-bot-role
+# add a rule:
+#   - apiGroups: ["apps"]
+#     resources: ["deployments"]
+#     verbs: ["get", "list", "update"]`,
+  ],
+  live: {
+    manifest: "content/troubleshooting/manifests/rbac-forbidden.yaml",
+  },
+  timeBudgetSeconds: 300,
+  points: 80,
+  difficulty: "medium",
+};
+
+// ---------------------------------------------------------------------------
+// 7. DNS resolution failure — a NetworkPolicy over-blocking required traffic
+// ---------------------------------------------------------------------------
+
+const coreDnsNetpol: TerminalExercise = {
+  id: "ts-ex-coredns-netpol",
+  domainId: "troubleshooting",
+  title: "Nothing in this namespace can resolve DNS",
+  scenario: `The \`deny-egress\` NetworkPolicy locks the \`client\` pod down completely — no egress at all, including DNS. \`nslookup kubernetes.default\` from inside \`client\` hangs and times out.
+
+**Task:** Add an egress rule to \`deny-egress\` allowing DNS to kube-system (UDP + TCP port 53) — keep everything else blocked.`,
+  hints: [
+    "Exec into client and try nslookup kubernetes.default first — confirm it hangs. kubectl describe netpol deny-egress shows egress: [] — nothing is allowed out, not even DNS.",
+    "Every namespace carries the built-in label kubernetes.io/metadata.name=<ns> (since 1.21) — use a namespaceSelector matching kube-system, plus ports 53/UDP and 53/TCP (CoreDNS listens on both).",
+    `Full solution:
+kubectl edit networkpolicy deny-egress
+# add under spec.egress:
+# - to:
+#   - namespaceSelector:
+#       matchLabels:
+#         kubernetes.io/metadata.name: kube-system
+#   ports:
+#   - protocol: UDP
+#     port: 53
+#   - protocol: TCP
+#     port: 53`,
+  ],
+  live: {
+    manifest: "content/troubleshooting/manifests/coredns-netpol.yaml",
+  },
+  timeBudgetSeconds: 420,
+  points: 100,
+  difficulty: "hard",
+};
+
+// ---------------------------------------------------------------------------
+// 8. Leftover cordon blocking scheduling
+// ---------------------------------------------------------------------------
+
+const nodeCordoned: TerminalExercise = {
+  id: "ts-ex-node-cordoned",
+  domainId: "troubleshooting",
+  title: `Nothing new schedules onto ${NODES.worker2}`,
+  scenario: `Nobody's noticed anything land on \`${NODES.worker2}\` in days. \`kubectl get nodes\` shows it \`SchedulingDisabled\` — cordoned during an investigation that finished without cleanup.
+
+**Task:** Confirm nothing else is wrong with the node, then make it schedulable again.`,
+  hints: [
+    "kubectl get nodes — the STATUS column names it directly.",
+    "kubectl describe node <name> for anything else abnormal (there isn't); cordon only sets unschedulable, it doesn't taint or evict anything.",
+    `Full solution:\nkubectl uncordon ${NODES.worker2}`,
+  ],
+  live: {
+    setupCommands: [["cordon", NODES.worker2]],
+    teardownCommands: [["uncordon", NODES.worker2]],
+  },
+  timeBudgetSeconds: 180,
+  points: 50,
+  difficulty: "easy",
+};
+
+const exercises: TerminalExercise[] = [
+  imagePullBackOff,
+  crashLoop,
+  svcSelector,
+  taintPending,
+  oomKilled,
+  rbacForbidden,
+  coreDnsNetpol,
+  nodeCordoned,
+];
 
 export default exercises;

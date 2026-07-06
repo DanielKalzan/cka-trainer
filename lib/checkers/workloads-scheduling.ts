@@ -126,3 +126,39 @@ export async function checkDedicatedNode(namespace: string): Promise<CheckResult
     feedback: `Taint repels everyone else, toleration + nodeSelector pull cache-1 in — it's really running on ${NODES.worker2}. This trio appears on the exam verbatim.`,
   };
 }
+
+export async function checkAffinityPending(namespace: string): Promise<CheckResult> {
+  const dep = await orNotFound(appsApi().readNamespacedDeployment({ name: "indexer", namespace }));
+  if (!dep) {
+    return { passed: false, feedback: "Deployment indexer is gone — the task was to unblock it, not remove it." };
+  }
+  const affinity = dep.spec?.template.spec?.affinity?.nodeAffinity?.requiredDuringSchedulingIgnoredDuringExecution;
+  if (!affinity) {
+    return {
+      passed: false,
+      feedback:
+        "The task says don't touch the Deployment's affinity rule — put it back and fix the node side instead.",
+    };
+  }
+  const nodes = await coreApi().listNode();
+  const hasSsdNode = nodes.items.some((n) => n.metadata?.labels?.disktype === "ssd");
+  if (!hasSsdNode) {
+    return {
+      passed: false,
+      feedback:
+        "No node carries disktype=ssd yet — that's exactly what indexer's nodeAffinity requires (kubectl get nodes --show-labels).",
+    };
+  }
+  if ((dep.status?.readyReplicas ?? 0) < 2) {
+    return {
+      passed: false,
+      feedback:
+        "Node labeled ✓ — but not both replicas are Ready yet. The scheduler retries Pending pods on its own; give it a moment and re-check.",
+    };
+  }
+  return {
+    passed: true,
+    feedback:
+      "A node now satisfies indexer's nodeAffinity and both replicas are Running — labeling the node (not touching the workload) is the real-exam pattern here.",
+  };
+}

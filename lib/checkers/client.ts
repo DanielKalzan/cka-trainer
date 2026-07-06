@@ -47,6 +47,29 @@ export function discoveryApi(): k8s.DiscoveryV1Api {
   return kubeConfig().makeApiClient(k8s.DiscoveryV1Api);
 }
 
+export function authorizationApi(): k8s.AuthorizationV1Api {
+  return kubeConfig().makeApiClient(k8s.AuthorizationV1Api);
+}
+
+/** Parses a Kubernetes memory quantity ("256Mi", "1Gi", "128974848") to bytes. */
+export function parseMemoryBytes(qty: string): number {
+  const units: Record<string, number> = {
+    Ki: 1024,
+    Mi: 1024 ** 2,
+    Gi: 1024 ** 3,
+    Ti: 1024 ** 4,
+    K: 1000,
+    M: 1000 ** 2,
+    G: 1000 ** 3,
+    T: 1000 ** 4,
+  };
+  const match = qty.match(/^(\d+(?:\.\d+)?)([A-Za-z]*)$/);
+  if (!match) return NaN;
+  const [, num, unit] = match;
+  const multiplier = unit ? units[unit] ?? NaN : 1;
+  return parseFloat(num) * multiplier;
+}
+
 /** Ready endpoint addresses behind a Service, via EndpointSlices. */
 export async function readyEndpointCount(namespace: string, service: string): Promise<number> {
   const slices = await discoveryApi().listNamespacedEndpointSlice({
