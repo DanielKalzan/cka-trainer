@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import exercises from "@/content/cluster-architecture/exercises";
 import { emptyClusterState, makeNode, type ClusterState } from "./cluster-state";
 import { applyYamlText, executeCommand } from "./engine";
 import { parseCommand } from "./parser";
@@ -9,17 +8,6 @@ function fresh(): ClusterState {
   const s = emptyClusterState();
   s.nodes = [makeNode("controlplane", { controlPlane: true }), makeNode("node01")];
   return s;
-}
-
-// Only the etcd exercise still carries sim fields — the rest run live.
-function exerciseState(id: string): ClusterState {
-  const ex = exercises.find((e) => e.id === id);
-  if (!ex?.initialState) throw new Error(`no sim exercise ${id}`);
-  return structuredClone(ex.initialState);
-}
-
-function checker(id: string) {
-  return exercises.find((e) => e.id === id)!.checker!;
 }
 
 describe("parser", () => {
@@ -206,31 +194,6 @@ describe("node ops", () => {
     });
     executeCommand(s, "kubectl taint nodes node01 dedicated:NoSchedule-");
     expect(s.nodes[1].spec.taints).toHaveLength(0);
-  });
-});
-
-describe("etcdctl (mocked)", () => {
-  it("refuses snapshot save without TLS flags", () => {
-    const s = exerciseState("ca-ex-etcd-backup-restore");
-    const res = executeCommand(s, "etcdctl snapshot save /opt/backup/etcd-snapshot.db");
-    expect(res.exitCode).toBe(1);
-    expect(res.output).toContain("--cacert");
-  });
-
-  it("full backup+restore passes the exercise checker", () => {
-    const s = exerciseState("ca-ex-etcd-backup-restore");
-    const save = executeCommand(
-      s,
-      "ETCDCTL_API=3 etcdctl snapshot save /opt/backup/etcd-snapshot.db --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key",
-    );
-    expect(save.exitCode).toBe(0);
-    expect(save.output).toContain("Snapshot saved");
-    const restore = executeCommand(
-      s,
-      "etcdctl snapshot restore /opt/backup/etcd-snapshot.db --data-dir=/var/lib/etcd-restored",
-    );
-    expect(restore.exitCode).toBe(0);
-    expect(checker("ca-ex-etcd-backup-restore")(s).passed).toBe(true);
   });
 });
 

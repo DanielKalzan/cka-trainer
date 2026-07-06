@@ -8,6 +8,18 @@ export const KUBECONFIG_PATH =
 
 const SHELLRC = path.join(__dirname, "shellrc.sh");
 
+/** Root shell inside a kind node container — for node-level scenarios (etcd
+ *  backup, kubelet surgery). Needs the docker CLI + socket, same as kind itself. */
+export function spawnNodeShell(node: string, cols: number, rows: number): pty.IPty {
+  return pty.spawn("docker", ["exec", "-it", node, "bash"], {
+    name: "xterm-256color",
+    cols,
+    rows,
+    cwd: os.homedir(),
+    env: { ...process.env },
+  });
+}
+
 export function spawnShell(
   cols: number,
   rows: number,

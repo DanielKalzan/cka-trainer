@@ -4,7 +4,7 @@ import type {
   ClientControlMessage,
   ServerControlMessage,
 } from "@/lib/types/terminal-protocol";
-import { spawnShell } from "./pty";
+import { spawnNodeShell, spawnShell } from "./pty";
 import {
   createExerciseSession,
   runCheck,
@@ -74,7 +74,9 @@ export async function attachSession(ws: WebSocket, exerciseId?: string): Promise
     }
   }
 
-  shell = spawnShell(size.cols, size.rows, session?.kubeconfigPath);
+  shell = session?.scenarioNode
+    ? spawnNodeShell(session.scenarioNode, size.cols, size.rows)
+    : spawnShell(size.cols, size.rows, session?.kubeconfigPath ?? undefined);
   shell.onData((data) => {
     if (ws.readyState === ws.OPEN) ws.send(Buffer.from(data));
   });

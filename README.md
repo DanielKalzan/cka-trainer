@@ -49,7 +49,7 @@ The cluster's kubeconfig is written to `./.kubeconfig` (gitignored). Everything 
 
 ## Security note
 
-The terminal bridge binds to `127.0.0.1` only and gives the browser terminal a real shell on your machine (that's the point — real `kubectl`, real vim, real cluster). Single-user, local-only by design. Don't expose the bridge port to a network.
+The terminal bridge binds to `127.0.0.1` only and gives the browser terminal a real shell on your machine (that's the point — real `kubectl`, real vim, real cluster). Node-level exercises (etcd backup) additionally shell into the kind node containers through the Docker socket — in the compose flow that socket is mounted into the app container, which is root-equivalent on the host. Single-user, local-only by design. Don't expose the bridge port to a network.
 
 ## Scripts
 

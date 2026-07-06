@@ -1,61 +1,35 @@
 import type { TerminalExercise } from "@/lib/types/content";
 import { NODES } from "@/lib/constants/cluster";
-import { emptyClusterState, makeNode, type ClusterState } from "@/lib/terminal-engine/cluster-state";
 
 // ---------------------------------------------------------------------------
-// 1. etcd backup + restore — still on the sim terminal: it needs a shell on
-//    the control-plane node, which arrives with the scenario-scripts step.
+// 1. etcd backup + restore — node-level scenario: the terminal is a root shell
+//    on the real control-plane node, etcdctl/etcdutl provisioned by setup.sh.
 // ---------------------------------------------------------------------------
-
-function etcdInitialState(): ClusterState {
-  const state = emptyClusterState();
-  state.nodes = [makeNode("controlplane", { controlPlane: true }), makeNode("node01")];
-  return state;
-}
 
 const etcdBackupRestore: TerminalExercise = {
   id: "ca-ex-etcd-backup-restore",
   domainId: "cluster-architecture",
   title: "Back up etcd, then restore it",
-  scenario: `The cluster's etcd runs as a static pod on \`controlplane\` (endpoint \`https://127.0.0.1:2379\`, certs under \`/etc/kubernetes/pki/etcd/\`).
+  scenario: `Your terminal is a **root shell on \`${NODES.controlPlane}\`** — the real control-plane node. etcd runs there as a static pod (endpoint \`https://127.0.0.1:2379\`, certs under \`/etc/kubernetes/pki/etcd/\`).
 
 **Task 1:** Save a snapshot of etcd to \`/opt/backup/etcd-snapshot.db\`.
 
 **Task 2:** Restore that snapshot into the data directory \`/var/lib/etcd-restored\`.
 
-(In the real exam you would then edit the etcd static pod manifest — here the simulator stops at the etcdctl commands.)`,
-  initialState: etcdInitialState(),
+**Stop there** — do not edit \`/etc/kubernetes/manifests/etcd.yaml\` to point at the new directory (this cluster keeps running on its live data dir). On the real exam that manifest edit is the final step.`,
   hints: [
-    "etcdctl needs the API endpoint plus three TLS flags. All three files live in the same directory.",
-    "Snapshot save: --endpoints=https://127.0.0.1:2379 --cacert=.../ca.crt --cert=.../server.crt --key=.../server.key. Restore needs none of those — only --data-dir.",
+    "Saving talks to the live etcd API: etcdctl needs the endpoint plus three TLS flags (all three files live in /etc/kubernetes/pki/etcd/). Restoring never touches the API — since etcd 3.6 it lives in the offline tool etcdutl and needs only --data-dir.",
+    "Save: etcdctl snapshot save <path> --endpoints=https://127.0.0.1:2379 --cacert=.../ca.crt --cert=.../server.crt --key=.../server.key. Verify with: etcdutl snapshot status <path>.",
     `Full solution:
-etcdctl snapshot save /opt/backup/etcd-snapshot.db --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key
-etcdctl snapshot restore /opt/backup/etcd-snapshot.db --data-dir=/var/lib/etcd-restored`,
+etcdctl snapshot save /opt/backup/etcd-snapshot.db \\
+  --endpoints=https://127.0.0.1:2379 \\
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \\
+  --cert=/etc/kubernetes/pki/etcd/server.crt \\
+  --key=/etc/kubernetes/pki/etcd/server.key
+etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir=/var/lib/etcd-restored`,
   ],
-  checker: (state) => {
-    const saved = state.etcd.snapshotsSaved.includes("/opt/backup/etcd-snapshot.db");
-    const restored =
-      state.etcd.restoredFrom?.snapshotPath === "/opt/backup/etcd-snapshot.db" &&
-      state.etcd.restoredFrom?.dataDir === "/var/lib/etcd-restored";
-    if (!saved) {
-      return {
-        passed: false,
-        feedback:
-          "No snapshot saved to /opt/backup/etcd-snapshot.db yet. Remember the endpoint + three TLS flags.",
-      };
-    }
-    if (!restored) {
-      return {
-        passed: false,
-        feedback:
-          "Snapshot saved ✓ — but it hasn't been restored into /var/lib/etcd-restored. Restore takes only --data-dir.",
-      };
-    }
-    return {
-      passed: true,
-      feedback:
-        "Snapshot saved and restored to a fresh data dir. On the real exam, finish by pointing the etcd-data hostPath in /etc/kubernetes/manifests/etcd.yaml at the new directory.",
-    };
+  live: {
+    scenario: "etcd-backup-restore",
   },
   timeBudgetSeconds: 420,
   points: 100,

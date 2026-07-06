@@ -71,7 +71,42 @@ async function pollPass(ws, label, timeoutMs = 120000) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const dexec = (cmd) =>
+  execFileSync("docker", ["exec", "cka-trainer-control-plane", "bash", "-c", cmd], {
+    encoding: "utf8",
+  });
+
 const CASES = [
+  {
+    id: "ca-ex-etcd-backup-restore",
+    nodeLevel: true,
+    preAssert() {
+      // setup.sh must have provisioned the tools and a clean slate
+      dexec("command -v etcdctl && command -v etcdutl && test -d /opt/backup");
+    },
+    solve() {
+      dexec(
+        "etcdctl snapshot save /opt/backup/etcd-snapshot.db" +
+          " --endpoints=https://127.0.0.1:2379" +
+          " --cacert=/etc/kubernetes/pki/etcd/ca.crt" +
+          " --cert=/etc/kubernetes/pki/etcd/server.crt" +
+          " --key=/etc/kubernetes/pki/etcd/server.key",
+      );
+      dexec("etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir=/var/lib/etcd-restored");
+    },
+    async after() {
+      // teardown.sh must remove the artifacts from the node
+      for (let i = 0; i < 10; i++) {
+        try {
+          dexec("test ! -e /opt/backup && test ! -e /var/lib/etcd-restored");
+          return;
+        } catch {
+          await sleep(1000);
+        }
+      }
+      throw new Error("etcd artifacts left on control-plane after teardown");
+    },
+  },
   {
     id: "ca-ex-rbac-ci",
     solve(ns) {
@@ -246,13 +281,15 @@ for (const c of CASES) {
     const verdict = await pollPass(ws, c.id);
     ws.close();
     await sleep(4000); // let teardown run
-    const nsPhase = (() => {
-      try {
-        return k("get", "ns", namespace, "-o", "jsonpath={.status.phase}").trim();
-      } catch { return "GONE"; }
-    })();
-    if (nsPhase !== "GONE" && nsPhase !== "Terminating") {
-      throw new Error(`namespace ${namespace} still ${nsPhase} after close`);
+    if (!c.nodeLevel) {
+      const nsPhase = (() => {
+        try {
+          return k("get", "ns", namespace, "-o", "jsonpath={.status.phase}").trim();
+        } catch { return "GONE"; }
+      })();
+      if (nsPhase !== "GONE" && nsPhase !== "Terminating") {
+        throw new Error(`namespace ${namespace} still ${nsPhase} after close`);
+      }
     }
     if (c.after) await c.after();
     console.log(`PASS  ${c.id}  (${((Date.now() - t0) / 1000).toFixed(1)}s)  "${verdict.feedback.slice(0, 60)}…"`);

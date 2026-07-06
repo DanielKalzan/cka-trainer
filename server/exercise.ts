@@ -15,14 +15,29 @@ const SESSION_DIR = path.join(os.tmpdir(), "cka-trainer-sessions");
 /** Safety cap — a stuck client reconnect loop must not flood the local cluster. */
 const MAX_SESSIONS = 10;
 
+/** Node-level scenarios: setup/teardown scripts under /scripts/scenarios/<id>,
+ *  PTY shells into the named kind node instead of a kubectl shell. */
+const SCENARIOS: Record<string, { node: string }> = {
+  "etcd-backup-restore": { node: "cka-trainer-control-plane" },
+};
+
 export interface ExerciseSession {
   exerciseId: string;
-  namespace: string;
-  kubeconfigPath: string;
+  /** null for scenario (node-level) sessions — they have no session namespace. */
+  namespace: string | null;
+  kubeconfigPath: string | null;
+  /** kind node the PTY shells into; null = regular kubectl shell. */
+  scenarioNode: string | null;
+  /** Key in the active-session set (namespace, or a token for scenarios). */
+  activeKey: string;
 }
 
 /** Namespaces owned by live WS connections — everything else with our label is an orphan. */
 const active = new Set<string>();
+
+function scenarioScript(id: string, phase: "setup" | "teardown"): string {
+  return path.join(REPO_ROOT, "scripts", "scenarios", id, `${phase}.sh`);
+}
 
 async function kubectl(...args: string[]): Promise<string> {
   // cwd = repo root so setup commands can `apply -f content/...` with repo-relative paths.
@@ -39,6 +54,21 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
   }
   if (active.size >= MAX_SESSIONS) {
     throw new Error("too many active exercise sessions — close other exercise tabs");
+  }
+
+  if (exercise.live.scenario) {
+    const scenario = SCENARIOS[exercise.live.scenario];
+    if (!scenario) throw new Error(`unknown scenario ${exercise.live.scenario}`);
+    await exec("bash", [scenarioScript(exercise.live.scenario, "setup")], { cwd: REPO_ROOT });
+    const activeKey = `scenario-${exerciseId}-${Date.now()}`;
+    active.add(activeKey);
+    return {
+      exerciseId,
+      namespace: null,
+      kubeconfigPath: null,
+      scenarioNode: scenario.node,
+      activeKey,
+    };
   }
 
   const namespace = `ex-${exerciseId}-${Date.now()}`;
@@ -76,13 +106,22 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
   ]);
 
   active.add(namespace);
-  return { exerciseId, namespace, kubeconfigPath };
+  return { exerciseId, namespace, kubeconfigPath, scenarioNode: null, activeKey: namespace };
 }
 
 export async function teardownExerciseSession(session: ExerciseSession): Promise<void> {
-  active.delete(session.namespace);
-  fs.rmSync(session.kubeconfigPath, { force: true });
+  active.delete(session.activeKey);
   const live = getExerciseById(session.exerciseId)?.live;
+  if (live?.scenario) {
+    try {
+      await exec("bash", [scenarioScript(live.scenario, "teardown")], { cwd: REPO_ROOT });
+    } catch (err) {
+      console.warn(`[bridge] scenario teardown ${live.scenario}: ${(err as Error).message}`);
+    }
+    return;
+  }
+  if (!session.namespace || !session.kubeconfigPath) return;
+  fs.rmSync(session.kubeconfigPath, { force: true });
   const cleanups = live?.clusterScopedCleanup ?? [];
   const restores = live?.teardownCommands ?? [];
   const results = await Promise.allSettled([
@@ -106,7 +145,8 @@ export async function runCheck(session: ExerciseSession): Promise<CheckResult> {
     return { passed: false, feedback: `No checker registered for ${session.exerciseId}.` };
   }
   try {
-    return await checker(session.namespace);
+    // Scenario sessions have no namespace — their checkers ignore the argument.
+    return await checker(session.namespace ?? "");
   } catch (err) {
     return {
       passed: false,

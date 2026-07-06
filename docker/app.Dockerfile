@@ -13,6 +13,10 @@ RUN apt-get update \
 
 COPY --from=k8s-bins /usr/bin/kubectl /usr/local/bin/kubectl
 
+# docker CLI (static) — node-level scenarios shell into the kind node
+# containers via `docker exec` (host socket mounted by compose).
+COPY --from=docker:28-cli /usr/local/bin/docker /usr/local/bin/docker
+
 WORKDIR /app
 
 # Dependency layer — node-pty compiles its native module here, against the

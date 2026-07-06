@@ -12,7 +12,7 @@ const TASKS = [
   "sn-ex-expose",
   "ws-ex-dedicated-node",
   "ts-ex-taint-pending",
-  "ts-ex-svc-selector",
+  "ca-ex-etcd-backup-restore",
   "st-ex-pv-pvc-pod",
   "sn-ex-netpol",
 ];

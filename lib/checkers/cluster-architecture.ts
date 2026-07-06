@@ -1,11 +1,58 @@
+import { execFile } from "child_process";
+import { promisify } from "util";
 import type { CheckResult } from "@/lib/types/content";
 import { NODES } from "@/lib/constants/cluster";
 import { appsApi, coreApi, orNotFound, rbacApi } from "./client";
 
-/**
- * Cluster-architecture checkers. (The etcd backup/restore exercise is graded
- * by its scenario script, not here — it lives at the node level.)
- */
+const exec = promisify(execFile);
+
+/** Cluster-architecture checkers. */
+
+/** Run a command inside the control-plane node container; null exit = failed. */
+async function onControlPlane(cmd: string): Promise<string | null> {
+  try {
+    const { stdout } = await exec("docker", ["exec", NODES.controlPlane, "bash", "-c", cmd]);
+    return stdout;
+  } catch {
+    return null;
+  }
+}
+
+/** Node-level exercise — grades files on the control-plane node, not the API.
+ *  The namespace argument is unused (scenario sessions have none). */
+export async function checkEtcdBackupRestore(): Promise<CheckResult> {
+  const saved = await onControlPlane("test -s /opt/backup/etcd-snapshot.db && echo ok");
+  if (!saved) {
+    return {
+      passed: false,
+      feedback:
+        "No snapshot at /opt/backup/etcd-snapshot.db yet. Remember: etcdctl snapshot save needs the endpoint + three TLS flags.",
+    };
+  }
+  const valid = await onControlPlane(
+    "etcdutl snapshot status /opt/backup/etcd-snapshot.db >/dev/null 2>&1 && echo ok",
+  );
+  if (!valid) {
+    return {
+      passed: false,
+      feedback:
+        "/opt/backup/etcd-snapshot.db exists but isn't a valid etcd snapshot — did the save command actually succeed? Check its output.",
+    };
+  }
+  const restored = await onControlPlane("test -d /var/lib/etcd-restored/member && echo ok");
+  if (!restored) {
+    return {
+      passed: false,
+      feedback:
+        "Snapshot saved ✓ — but nothing has been restored into /var/lib/etcd-restored. Since etcd 3.6 the restore lives in etcdutl, and it needs only --data-dir.",
+    };
+  }
+  return {
+    passed: true,
+    feedback:
+      "Snapshot saved and restored to a fresh data dir. On the real exam, finish by pointing the etcd-data hostPath in /etc/kubernetes/manifests/etcd.yaml at the new directory.",
+  };
+}
 
 export async function checkRbacCi(namespace: string): Promise<CheckResult> {
   const sa = await orNotFound(

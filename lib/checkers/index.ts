@@ -1,5 +1,9 @@
 import type { CheckResult } from "@/lib/types/content";
-import { checkNodeMaintenance, checkRbacCi } from "./cluster-architecture";
+import {
+  checkEtcdBackupRestore,
+  checkNodeMaintenance,
+  checkRbacCi,
+} from "./cluster-architecture";
 import { checkExpose, checkNetpol, checkNodePort } from "./services-networking";
 import { checkPvPvcPod, checkStorageClassClaim } from "./storage";
 import {
@@ -23,6 +27,7 @@ import {
 export type LiveChecker = (namespace: string) => Promise<CheckResult>;
 
 const CHECKERS: Record<string, LiveChecker> = {
+  "ca-ex-etcd-backup-restore": checkEtcdBackupRestore,
   "ca-ex-rbac-ci": checkRbacCi,
   "ca-ex-node-maintenance": checkNodeMaintenance,
   "sn-ex-expose": checkExpose,
