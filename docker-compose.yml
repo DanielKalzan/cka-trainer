@@ -3,14 +3,23 @@
 #   docker compose up --build          start everything (creates the cluster on first run)
 #   docker compose --profile teardown run --rm cluster-down   delete the kind cluster
 #
-# Both services use the host network namespace (Linux):
-#  - cluster-init drives kind through the host Docker socket, so the kind nodes
-#    are sibling containers and the kubeconfig's 127.0.0.1 API address works.
-#  - app's bridge binds 0.0.0.0:3001 so it's reachable via the host's LAN IP too
-#    (not just localhost) — it gates connections by Origin instead (see
-#    server/index.ts). That means anyone on the same LAN who can reach this
-#    port gets a real shell into the cluster; fine on a trusted home network,
-#    not on shared/public wifi.
+# Both services use the host network namespace (Linux) — this is required, not
+# cosmetic: the kind kubeconfig's API address is 127.0.0.1:<port> (kind
+# publishes it on the host loopback), so app's kubectl / @kubernetes/client-node
+# and cluster-init's kind CLI can only reach it by sharing the host netns.
+#  - app's bridge binds 127.0.0.1:3001 (see server/index.ts). With host
+#    networking that IS the host loopback, so the browser on this machine can
+#    reach it while the LAN/internet cannot — the bridge has no auth layer, so
+#    it must never be exposed beyond localhost.
+#    NOTE: network_mode: host removes Docker's network isolation for the WHOLE
+#    container, not just port 3001 — EVERY port anything in this container
+#    listens on is published on the host. Any new listener added here must bind
+#    127.0.0.1, or it silently becomes LAN/internet-reachable with no gate.
+#  - the docker socket is mounted on app because the node-level scenarios (etcd
+#    backup/restore) `docker exec` into the kind node containers. This grants
+#    host-Docker (≈ host root) access to the app container, which is acceptable
+#    ONLY because the bridge is localhost-bound and single-user. Do not expose
+#    this service to the network while the socket is mounted.
 # `docker compose down` leaves the kind cluster running — use the teardown
 # profile (or npm run cluster:down) to delete it.
 
