@@ -49,6 +49,10 @@ const DISCONNECTED_RESULT: CheckResult = {
   feedback: "Terminal isn't connected — reconnect and try again.",
 };
 
+/** Upper bound on how long a single grade check may take before we give up on
+ *  the bridge and resolve with a failure — keeps exam grading from hanging. */
+const CHECK_TIMEOUT_MS = 30_000;
+
 const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
   function LiveTerminal({ exerciseId, onReady }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -70,8 +74,23 @@ const LiveTerminal = forwardRef<LiveTerminalHandle, LiveTerminalProps>(
           return Promise.resolve(DISCONNECTED_RESULT);
         }
         return new Promise<CheckResult>((resolve) => {
-          pendingChecksRef.current.push(resolve);
+          let settled = false;
+          const settle = (r: CheckResult) => {
+            if (settled) return;
+            settled = true;
+            resolve(r);
+          };
+          pendingChecksRef.current.push(settle);
           ws.send(JSON.stringify({ type: "check" }));
+          // Safety net: never let a check hang forever (a wedged socket would
+          // otherwise freeze exam grading on "Grading…"). Drop our resolver from
+          // the FIFO so a late result still lines up with the right request.
+          setTimeout(() => {
+            if (settled) return;
+            const i = pendingChecksRef.current.indexOf(settle);
+            if (i >= 0) pendingChecksRef.current.splice(i, 1);
+            settle({ passed: false, feedback: "Grading timed out — the terminal didn't respond. Try again." });
+          }, CHECK_TIMEOUT_MS);
         });
       },
     }));

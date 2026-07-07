@@ -43,8 +43,19 @@ export async function attachSession(ws: WebSocket, exerciseId?: string): Promise
     if (msg.type === "resize" && Number.isInteger(msg.cols) && Number.isInteger(msg.rows)) {
       size = { cols: Math.max(2, msg.cols), rows: Math.max(2, msg.rows) };
       shell?.resize(size.cols, size.rows);
-    } else if (msg.type === "check" && session) {
-      void runCheck(session).then((result) => send(ws, { type: "check-result", result }));
+    } else if (msg.type === "check") {
+      // Always answer a check. If the namespace is still provisioning, session is
+      // null — dropping the message silently (the old behaviour) left the client's
+      // check promise pending forever, which deadlocked exam grading when the
+      // timer fired on a task that hadn't finished setting up.
+      if (session) {
+        void runCheck(session).then((result) => send(ws, { type: "check-result", result }));
+      } else {
+        send(ws, {
+          type: "check-result",
+          result: { passed: false, feedback: "Still provisioning this exercise — give it a moment and check again." },
+        });
+      }
     }
   });
 
