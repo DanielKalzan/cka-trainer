@@ -32,8 +32,11 @@ export interface ExerciseSession {
   activeKey: string;
 }
 
-/** Namespaces owned by live WS connections — everything else with our label is an orphan. */
-const active = new Set<string>();
+/** Live sessions owned by open WS connections, keyed by activeKey (namespace for
+ *  namespace exercises, a token for scenarios). Any labeled namespace whose name
+ *  isn't a key here is an orphan. Holding the full session objects (not just the
+ *  keys) lets the shutdown handler tear them down gracefully on SIGINT/SIGTERM. */
+const liveSessions = new Map<string, ExerciseSession>();
 
 function scenarioScript(id: string, phase: "setup" | "teardown"): string {
   return path.join(REPO_ROOT, "scripts", "scenarios", id, `${phase}.sh`);
@@ -52,7 +55,7 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
   if (!exercise?.live) {
     throw new Error(`exercise ${exerciseId} is not available in live mode`);
   }
-  if (active.size >= MAX_SESSIONS) {
+  if (liveSessions.size >= MAX_SESSIONS) {
     throw new Error("too many active exercise sessions — close other exercise tabs");
   }
 
@@ -61,14 +64,15 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
     if (!scenario) throw new Error(`unknown scenario ${exercise.live.scenario}`);
     await exec("bash", [scenarioScript(exercise.live.scenario, "setup")], { cwd: REPO_ROOT });
     const activeKey = `scenario-${exerciseId}-${Date.now()}`;
-    active.add(activeKey);
-    return {
+    const session: ExerciseSession = {
       exerciseId,
       namespace: null,
       kubeconfigPath: null,
       scenarioNode: scenario.node,
       activeKey,
     };
+    liveSessions.set(activeKey, session);
+    return session;
   }
 
   const namespace = `ex-${exerciseId}-${Date.now()}`;
@@ -105,12 +109,55 @@ export async function createExerciseSession(exerciseId: string): Promise<Exercis
     `--namespace=${namespace}`,
   ]);
 
-  active.add(namespace);
-  return { exerciseId, namespace, kubeconfigPath, scenarioNode: null, activeKey: namespace };
+  const session: ExerciseSession = {
+    exerciseId,
+    namespace,
+    kubeconfigPath,
+    scenarioNode: null,
+    activeKey: namespace,
+  };
+  liveSessions.set(namespace, session);
+  return session;
+}
+
+/** Parse the exerciseId back out of a session namespace name (`ex-<id>-<ts>`),
+ *  so the orphan sweep can look the exercise up and run its cluster-scoped
+ *  cleanup. The trailing `-<digits>` is the Date.now() timestamp. */
+function exerciseIdFromNamespace(namespace: string): string | undefined {
+  return /^ex-(.+)-\d+$/.exec(namespace)?.[1];
+}
+
+/** Undo everything a namespace exercise created: the namespace itself, any
+ *  cluster-scoped objects it added (PVs, StorageClasses — not covered by the
+ *  namespace delete), any node mutations it made (taints/cordons, via the
+ *  exercise's teardownCommands), and its per-session kubeconfig file. Shared by
+ *  normal teardown and the orphan sweep so a crash can't leave half of it behind. */
+async function cleanupNamespaceArtifacts(
+  exerciseId: string | undefined,
+  namespace: string,
+  kubeconfigPath: string | null,
+): Promise<void> {
+  const live = exerciseId ? getExerciseById(exerciseId)?.live : undefined;
+  if (kubeconfigPath) fs.rmSync(kubeconfigPath, { force: true });
+  const cleanups = live?.clusterScopedCleanup ?? [];
+  const restores = live?.teardownCommands ?? [];
+  const results = await Promise.allSettled([
+    kubectl("delete", "namespace", namespace, "--wait=false", "--ignore-not-found"),
+    ...cleanups.map((ref) =>
+      kubectl("delete", ref.kind.toLowerCase(), ref.name, "--wait=false", "--ignore-not-found"),
+    ),
+    // Restores fail routinely (user already removed the taint/cordon) — ignore.
+    ...restores.map((cmd) => kubectl(...cmd).catch(() => "")),
+  ]);
+  for (const r of results) {
+    if (r.status === "rejected") {
+      console.warn(`[bridge] cleanup of ${namespace}: ${r.reason}`);
+    }
+  }
 }
 
 export async function teardownExerciseSession(session: ExerciseSession): Promise<void> {
-  active.delete(session.activeKey);
+  liveSessions.delete(session.activeKey);
   const live = getExerciseById(session.exerciseId)?.live;
   if (live?.scenario) {
     try {
@@ -120,23 +167,16 @@ export async function teardownExerciseSession(session: ExerciseSession): Promise
     }
     return;
   }
-  if (!session.namespace || !session.kubeconfigPath) return;
-  fs.rmSync(session.kubeconfigPath, { force: true });
-  const cleanups = live?.clusterScopedCleanup ?? [];
-  const restores = live?.teardownCommands ?? [];
-  const results = await Promise.allSettled([
-    kubectl("delete", "namespace", session.namespace, "--wait=false", "--ignore-not-found"),
-    ...cleanups.map((ref) =>
-      kubectl("delete", ref.kind.toLowerCase(), ref.name, "--wait=false", "--ignore-not-found"),
-    ),
-    // Restores fail routinely (user already removed the taint/cordon) — ignore.
-    ...restores.map((cmd) => kubectl(...cmd).catch(() => "")),
-  ]);
-  for (const r of results) {
-    if (r.status === "rejected") {
-      console.warn(`[bridge] teardown of ${session.namespace}: ${r.reason}`);
-    }
-  }
+  if (!session.namespace) return;
+  await cleanupNamespaceArtifacts(session.exerciseId, session.namespace, session.kubeconfigPath);
+}
+
+/** Tear down every live session — for graceful shutdown on SIGINT/SIGTERM, so a
+ *  Ctrl-C (or `concurrently -k`) doesn't leave node taints/cordons, cluster-scoped
+ *  objects, or scenario node-state behind for the next run to trip over. */
+export async function teardownAllSessions(): Promise<void> {
+  const sessions = [...liveSessions.values()];
+  await Promise.allSettled(sessions.map((session) => teardownExerciseSession(session)));
 }
 
 export async function runCheck(session: ExerciseSession): Promise<CheckResult> {
@@ -155,7 +195,11 @@ export async function runCheck(session: ExerciseSession): Promise<CheckResult> {
   }
 }
 
-/** Delete labeled namespaces no live session owns — crashed bridge, killed tab, etc. */
+/** Clean up labeled namespaces no live session owns — crashed bridge, killed
+ *  tab, etc. Not just the namespace: also the exercise's cluster-scoped objects
+ *  and node mutations (taints/cordons/PVs/StorageClasses), which a namespace
+ *  delete leaves behind and which would otherwise corrupt a later exercise's
+ *  grading. The exerciseId is recovered from the namespace name. */
 export async function sweepOrphanNamespaces(): Promise<void> {
   try {
     const out = await kubectl(
@@ -166,10 +210,11 @@ export async function sweepOrphanNamespaces(): Promise<void> {
       "-o",
       "jsonpath={.items[*].metadata.name}",
     );
-    const orphans = out.trim().split(/\s+/).filter((ns) => ns && !active.has(ns));
+    const orphans = out.trim().split(/\s+/).filter((ns) => ns && !liveSessions.has(ns));
     for (const ns of orphans) {
       console.log(`[bridge] sweeping orphan namespace ${ns}`);
-      await kubectl("delete", "namespace", ns, "--wait=false", "--ignore-not-found");
+      const kubeconfigPath = path.join(SESSION_DIR, `${ns}.yaml`);
+      await cleanupNamespaceArtifacts(exerciseIdFromNamespace(ns), ns, kubeconfigPath);
     }
   } catch (err) {
     console.warn(`[bridge] orphan sweep skipped: ${(err as Error).message}`);

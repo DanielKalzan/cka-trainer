@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as http from "http";
 import { WebSocketServer } from "ws";
 import { attachSession } from "./session";
-import { sweepOrphanNamespaces } from "./exercise";
+import { sweepOrphanNamespaces, teardownAllSessions } from "./exercise";
 import { KUBECONFIG_PATH } from "./pty";
 
 const PORT = Number(process.env.TERMINAL_BRIDGE_PORT ?? 3001);
@@ -62,3 +62,22 @@ server.listen(PORT, HOST, () => {
   void sweepOrphanNamespaces();
   setInterval(() => void sweepOrphanNamespaces(), SWEEP_INTERVAL_MS);
 });
+
+// Graceful shutdown: `npm run dev` runs the bridge under `concurrently -k`, so
+// every Ctrl-C sends SIGTERM here. Without this, live sessions never tear down
+// and leave node taints/cordons, cluster-scoped objects, and scenario node-state
+// behind. Run teardown for all of them, then exit.
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[bridge] ${signal} received — tearing down live exercise sessions`);
+  try {
+    await teardownAllSessions();
+  } catch (err) {
+    console.warn(`[bridge] shutdown teardown error: ${(err as Error).message}`);
+  }
+  process.exit(0);
+}
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
