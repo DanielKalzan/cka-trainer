@@ -2,14 +2,13 @@
 // For each: provision session, pre-check must FAIL, apply the solution via
 // kubectl (state-graded — path doesn't matter), poll check until PASS, close,
 // verify teardown (namespace deleted / node state restored).
-import WebSocket from "ws";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { connect, checkOnce, pollPass, sleep } from "../lib/ws-client.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KC = `${REPO}/.kubeconfig`;
-const WS_URL = "ws://127.0.0.1:3001/term";
 
 function k(...args) {
   return execFileSync("kubectl", ["--kubeconfig", KC, ...args], {
@@ -18,60 +17,6 @@ function k(...args) {
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
-
-function connect(exerciseId) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${WS_URL}?exercise=${exerciseId}`, {
-      origin: "http://localhost:3000",
-    });
-    const timer = setTimeout(() => reject(new Error(`${exerciseId}: ready timeout`)), 120000);
-    ws.on("message", (data, isBinary) => {
-      if (isBinary) return;
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "ready") {
-        clearTimeout(timer);
-        resolve({ ws, namespace: msg.namespace });
-      } else if (msg.type === "error") {
-        clearTimeout(timer);
-        reject(new Error(`${exerciseId}: bridge error: ${msg.message}`));
-      }
-    });
-    ws.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-  });
-}
-
-function checkOnce(ws) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("check timeout")), 30000);
-    const onMsg = (data, isBinary) => {
-      if (isBinary) return;
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "check-result") {
-        clearTimeout(timer);
-        ws.off("message", onMsg);
-        resolve(msg.result);
-      }
-    };
-    ws.on("message", onMsg);
-    ws.send(JSON.stringify({ type: "check" }));
-  });
-}
-
-async function pollPass(ws, label, timeoutMs = 120000) {
-  const start = Date.now();
-  let last;
-  while (Date.now() - start < timeoutMs) {
-    last = await checkOnce(ws);
-    if (last.passed) return last;
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  throw new Error(`${label}: never passed. Last feedback: ${last?.feedback}`);
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const dexec = (cmd) =>
   execFileSync("docker", ["exec", "cka-trainer-control-plane", "bash", "-c", cmd], {

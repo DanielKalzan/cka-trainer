@@ -6,6 +6,7 @@ import * as path from "path";
 import type { CheckResult } from "@/lib/types/content";
 import { getExerciseById } from "@/lib/content/registry";
 import { getLiveChecker } from "@/lib/checkers";
+import { NODES } from "@/lib/constants/cluster";
 import { KUBECONFIG_PATH, REPO_ROOT } from "./pty";
 
 const exec = promisify(execFile);
@@ -18,7 +19,7 @@ const MAX_SESSIONS = 10;
 /** Node-level scenarios: setup/teardown scripts under /scripts/scenarios/<id>,
  *  PTY shells into the named kind node instead of a kubectl shell. */
 const SCENARIOS: Record<string, { node: string }> = {
-  "etcd-backup-restore": { node: "cka-trainer-control-plane" },
+  "etcd-backup-restore": { node: NODES.controlPlane },
 };
 
 export interface ExerciseSession {

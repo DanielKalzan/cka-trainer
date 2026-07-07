@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Award, Clock, Flag, RotateCcw } from "lucide-react";
 import { getMockExam } from "@/content/mock-exams";
-import { getDomain } from "@/lib/constants/domains";
+import { getDomain, PASS_THRESHOLD } from "@/lib/constants/domains";
 import { getExerciseById } from "@/lib/content/registry";
 import type { CheckResult, TerminalExercise } from "@/lib/types/content";
 import { useExamStore, type ExamTaskResult } from "@/store/useExamStore";
@@ -101,7 +101,7 @@ function Runner({
       timeLimitSeconds: timeLimit,
       results,
       scorePct,
-      passed: scorePct >= 66,
+      passed: scorePct >= PASS_THRESHOLD,
     });
     // Navigating away unmounts every terminal → sessions close → the bridge
     // tears down all task namespaces. Attempt-wide cleanup for free.
