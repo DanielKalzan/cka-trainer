@@ -1,7 +1,7 @@
 # CKA Trainer — Project Memory
 
 ## What this is
-A gamified, self-paced study web app for the CKA (Certified Kubernetes Administrator) exam, built for a single user. Core differentiator: hands-on terminal exercises graded automatically, not just multiple-choice quizzes. The terminal runs against a **real local Kubernetes cluster (`kind`)**, not an in-memory simulation — see `MIGRATION_PROMPT.md` for why and how this changed. See `BUILD_PROMPT.md` for the original full spec — this file is the living reference for current conventions.
+A gamified, self-paced study web app for the CKA (Certified Kubernetes Administrator) exam, built for a single user. Core differentiator: hands-on terminal exercises graded automatically, not just multiple-choice quizzes. The terminal runs against a **real local Kubernetes cluster (`kind`)**, not an in-memory simulation — see `MIGRATION_PROMPT.md` for why and how this changed. This file is the living reference for current conventions.
 
 ## Stack
 - Next.js 14 (App Router), TypeScript (strict)
@@ -33,7 +33,7 @@ A gamified, self-paced study web app for the CKA (Certified Kubernetes Administr
 - `/lib/gamification/` — XP/level math, streak logic, badge rules, readiness score calculation (pure functions, unaffected by the cluster migration)
 - `/lib/constants/domains.ts` — the single source of truth for exam domain weights
 - `/store/` — Zustand stores (`useProgressStore` for gamification; terminal session state now lives server-side per WebSocket connection, not in a client store)
-- `/app/` — routes per Next.js App Router conventions, see site map in `BUILD_PROMPT.md` §7
+- `/app/` — routes per Next.js App Router conventions
 
 ## Exam domain weights (do not change without checking the current CNCF CKA curriculum)
 Troubleshooting 30% · Cluster Architecture 25% · Services & Networking 20% · Workloads & Scheduling 15% · Storage 10%

@@ -90,13 +90,6 @@ export const DOMAINS: readonly Domain[] = [
 /** Exam pass threshold, percent. */
 export const PASS_THRESHOLD = 66;
 
-/** Real exam duration, minutes. */
-export const EXAM_DURATION_MINUTES = 120;
-
 export function getDomain(id: string): Domain | undefined {
   return DOMAINS.find((d) => d.id === id);
-}
-
-export function isDomainId(id: string): id is DomainId {
-  return DOMAINS.some((d) => d.id === id);
 }
