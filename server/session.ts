@@ -48,16 +48,41 @@ export async function attachSession(ws: WebSocket, exerciseId?: string): Promise
     }
   });
 
+  // Heartbeat with pong tracking: a client that vanished without a TCP close
+  // (laptop sleep, Wi-Fi drop) stops answering pings. Terminate it so its PTY and
+  // namespace don't stay pinned — at MAX_SESSIONS a few of these would block new
+  // sessions. A plain ping without checking for the pong never detects this.
+  let isAlive = true;
+  ws.on("pong", () => {
+    isAlive = true;
+  });
   const ping = setInterval(() => {
-    if (ws.readyState === ws.OPEN) ws.ping();
+    if (ws.readyState !== ws.OPEN) return;
+    if (!isAlive) {
+      ws.terminate(); // fires 'close' → cleanup()
+      return;
+    }
+    isAlive = false;
+    ws.ping();
   }, PING_INTERVAL_MS);
 
-  ws.on("close", () => {
+  function cleanup(): void {
+    if (closed) return;
     closed = true;
     clearInterval(ping);
     shell?.kill();
     if (session) void teardownExerciseSession(session);
+  }
+
+  // Every socket needs its own 'error' listener: an unhandled EventEmitter
+  // 'error' (e.g. ECONNRESET when a browser is killed) throws and would crash the
+  // whole bridge, dropping every other session. Terminate this one; 'close'
+  // follows and runs cleanup.
+  ws.on("error", (err) => {
+    console.warn(`[bridge] ws error: ${(err as Error).message}`);
+    ws.terminate();
   });
+  ws.on("close", cleanup);
 
   if (exerciseId) {
     try {
