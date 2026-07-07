@@ -38,6 +38,28 @@ export interface ExerciseSession {
  *  keys) lets the shutdown handler tear them down gracefully on SIGINT/SIGTERM. */
 const liveSessions = new Map<string, ExerciseSession>();
 
+/** Serialize setup/teardown for a given exerciseId so a reset can't interleave
+ *  them. A reset remounts the terminal, which closes the old socket (→ teardown)
+ *  before opening the new one (→ setup); this lock makes teardown finish before
+ *  the new setup starts, so for node-level exercises the old session's restore
+ *  (taint/cordon removal, `rm -rf /opt/backup`) can't land on top of — and wipe
+ *  out — the new session's freshly-applied fault. Namespaces are timestamped, so
+ *  namespace exercises never collide; this is about the shared node state. */
+const exerciseLocks = new Map<string, Promise<void>>();
+function withExerciseLock<T>(exerciseId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = exerciseLocks.get(exerciseId) ?? Promise.resolve();
+  const result = prev.then(fn, fn); // run after the previous op settles, pass or fail
+  const tail = result.then(
+    () => {},
+    () => {},
+  );
+  exerciseLocks.set(exerciseId, tail);
+  void tail.finally(() => {
+    if (exerciseLocks.get(exerciseId) === tail) exerciseLocks.delete(exerciseId);
+  });
+  return result;
+}
+
 function scenarioScript(id: string, phase: "setup" | "teardown"): string {
   return path.join(REPO_ROOT, "scripts", "scenarios", id, `${phase}.sh`);
 }
@@ -50,7 +72,11 @@ async function kubectl(...args: string[]): Promise<string> {
   return stdout;
 }
 
-export async function createExerciseSession(exerciseId: string): Promise<ExerciseSession> {
+export function createExerciseSession(exerciseId: string): Promise<ExerciseSession> {
+  return withExerciseLock(exerciseId, () => createExerciseSessionLocked(exerciseId));
+}
+
+async function createExerciseSessionLocked(exerciseId: string): Promise<ExerciseSession> {
   const exercise = getExerciseById(exerciseId);
   if (!exercise?.live) {
     throw new Error(`exercise ${exerciseId} is not available in live mode`);
@@ -136,11 +162,16 @@ async function cleanupNamespaceArtifacts(
   exerciseId: string | undefined,
   namespace: string,
   kubeconfigPath: string | null,
+  includeShared = true,
 ): Promise<void> {
   const live = exerciseId ? getExerciseById(exerciseId)?.live : undefined;
   if (kubeconfigPath) fs.rmSync(kubeconfigPath, { force: true });
-  const cleanups = live?.clusterScopedCleanup ?? [];
-  const restores = live?.teardownCommands ?? [];
+  // Cluster-scoped objects (fixed names) and node mutations (one shared node) are
+  // shared across sessions of the same exercise. Skip them when a newer session
+  // for that exercise is already live — it owns that state now (see teardown).
+  // The namespace itself is per-session (timestamped) and is always safe to delete.
+  const cleanups = includeShared ? (live?.clusterScopedCleanup ?? []) : [];
+  const restores = includeShared ? (live?.teardownCommands ?? []) : [];
   const results = await Promise.allSettled([
     kubectl("delete", "namespace", namespace, "--wait=false", "--ignore-not-found"),
     ...cleanups.map((ref) =>
@@ -156,10 +187,24 @@ async function cleanupNamespaceArtifacts(
   }
 }
 
-export async function teardownExerciseSession(session: ExerciseSession): Promise<void> {
+export function teardownExerciseSession(session: ExerciseSession): Promise<void> {
+  return withExerciseLock(session.exerciseId, () => teardownExerciseSessionLocked(session));
+}
+
+async function teardownExerciseSessionLocked(session: ExerciseSession): Promise<void> {
   liveSessions.delete(session.activeKey);
   const live = getExerciseById(session.exerciseId)?.live;
+  // A reset creates a new session for the same exercise; the mutex keeps the old
+  // teardown and new setup from interleaving, but not from running in either
+  // order. If a newer session for this exercise is now live, it owns the shared
+  // node/cluster state — skip our restores so we don't wipe out its fresh fault.
+  const supersededByNewer = [...liveSessions.values()].some(
+    (s) => s.exerciseId === session.exerciseId,
+  );
   if (live?.scenario) {
+    // Scenario teardown (`rm -rf /opt/backup` etc.) touches only shared node
+    // state — if a newer session owns it, leave it for that session to clean up.
+    if (supersededByNewer) return;
     try {
       await exec("bash", [scenarioScript(live.scenario, "teardown")], { cwd: REPO_ROOT });
     } catch (err) {
@@ -168,7 +213,12 @@ export async function teardownExerciseSession(session: ExerciseSession): Promise
     return;
   }
   if (!session.namespace) return;
-  await cleanupNamespaceArtifacts(session.exerciseId, session.namespace, session.kubeconfigPath);
+  await cleanupNamespaceArtifacts(
+    session.exerciseId,
+    session.namespace,
+    session.kubeconfigPath,
+    !supersededByNewer,
+  );
 }
 
 /** Tear down every live session — for graceful shutdown on SIGINT/SIGTERM, so a

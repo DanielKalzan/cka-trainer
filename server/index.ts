@@ -28,6 +28,12 @@ const server = http.createServer((_req, res) => {
 
 const wss = new WebSocketServer({ server, path: "/term" });
 
+// Server-level 'error' listener so a listen/upgrade error can't bubble up as an
+// unhandled 'error' event and take the process down.
+wss.on("error", (err) => {
+  console.error(`[bridge] websocket server error: ${err.message}`);
+});
+
 wss.on("connection", (ws, req) => {
   const origin = req.headers.origin;
   if (!origin || !ALLOWED_ORIGINS.has(origin)) {
