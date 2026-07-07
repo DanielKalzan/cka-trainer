@@ -7,8 +7,11 @@ FROM kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619e
 
 FROM node:24-bookworm
 
+# vim = $KUBE_EDITOR for `kubectl edit`; jq for `... -o json | jq` in the
+# session (grep + coreutils text filters are already in the base image). The
+# restricted session PATH (server/pty.ts) decides which of these are reachable.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends vim less \
+  && apt-get install -y --no-install-recommends vim less jq \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=k8s-bins /usr/bin/kubectl /usr/local/bin/kubectl
