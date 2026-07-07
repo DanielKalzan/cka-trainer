@@ -1,8 +1,8 @@
 // Simulates mock-exam load: all 8 task sessions open concurrently (like the
 // ExamRunner keeping every visited terminal mounted), then a Promise.all batch
 // check (= finish()), then mass close (= navigation to results).
-import WebSocket from "ws";
 import { execFileSync } from "node:child_process";
+import { connect as connectSession, checkOnce } from "../lib/ws-client.mjs";
 
 const REPO = "/home/daniel/project/git-project/cka-trainer";
 const KC = `${REPO}/.kubeconfig`;
@@ -17,33 +17,10 @@ const TASKS = [
   "sn-ex-netpol",
 ];
 
-function connect(id) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:3001/term?exercise=${id}`, {
-      origin: "http://localhost:3000",
-    });
-    const t = setTimeout(() => reject(new Error(`${id}: ready timeout`)), 120000);
-    ws.on("message", (data, isBinary) => {
-      if (isBinary) return;
-      const m = JSON.parse(data.toString());
-      if (m.type === "ready") { clearTimeout(t); resolve({ id, ws, ns: m.namespace }); }
-      if (m.type === "error") { clearTimeout(t); reject(new Error(`${id}: ${m.message}`)); }
-    });
-    ws.on("error", reject);
-  });
-}
-
-function check(ws) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("check timeout")), 30000);
-    const onMsg = (data, isBinary) => {
-      if (isBinary) return;
-      const m = JSON.parse(data.toString());
-      if (m.type === "check-result") { clearTimeout(t); ws.off("message", onMsg); resolve(m.result); }
-    };
-    ws.on("message", onMsg);
-    ws.send(JSON.stringify({ type: "check" }));
-  });
+// Reshape the shared client's { ws, namespace } into this harness's { id, ws, ns }.
+async function connect(id) {
+  const { ws, namespace } = await connectSession(id);
+  return { id, ws, ns: namespace };
 }
 
 // Open all 8 sequentially-ish (browser would too) but hold them open together.
@@ -60,7 +37,7 @@ k("-n", rbac.ns, "create", "rolebinding", "ci-bot-deploy", "--role=deploy-manage
 
 // finish(): batch-grade everything in parallel.
 const t0 = Date.now();
-const results = await Promise.all(sessions.map(async (s) => ({ id: s.id, ...(await check(s.ws)) })));
+const results = await Promise.all(sessions.map(async (s) => ({ id: s.id, ...(await checkOnce(s.ws)) })));
 console.log(`batch grade took ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 for (const r of results) console.log(`  ${r.passed ? "PASS" : "fail"}  ${r.id}`);
 
