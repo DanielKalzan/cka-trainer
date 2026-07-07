@@ -47,6 +47,17 @@ export default function QuizRunner({
   if (!pool) return null;
   const currentPool = pool;
 
+  // pickRandom already clamps to the bank size, so a bank smaller than `length`
+  // just yields a shorter quiz. An empty bank, though, would crash on the
+  // question access below (and make the score a 0/0 NaN) — guard it.
+  if (currentPool.length === 0) {
+    return (
+      <div className="rounded-xl border border-edge bg-surface p-8 text-center text-muted">
+        No quiz questions are available for this domain yet.
+      </div>
+    );
+  }
+
   const q = currentPool[index];
 
   function submit() {

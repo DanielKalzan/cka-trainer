@@ -24,6 +24,22 @@ export default function ExamRunner({ examId }: { examId: string }) {
   const exercises = exam.taskIds
     .map((id) => getExerciseById(id))
     .filter((e): e is TerminalExercise => e !== undefined);
+  // A taskId that doesn't resolve to an exercise (typo, removed content) is
+  // dropped by the filter above. Surface the miscount instead of silently
+  // running a short exam, and don't render Runner with zero tasks — it indexes
+  // exercises[0] and would crash.
+  if (exercises.length < exam.taskIds.length) {
+    console.warn(
+      `[exam ${examId}] ${exam.taskIds.length - exercises.length} of ${exam.taskIds.length} tasks reference unknown exercises and were skipped.`,
+    );
+  }
+  if (exercises.length === 0) {
+    return (
+      <div className="rounded-xl border border-edge bg-surface p-8 text-center text-muted">
+        This mock exam has no runnable tasks — its exercise references are missing.
+      </div>
+    );
+  }
   return <Runner key={examId} exam={exam} exercises={exercises} />;
 }
 
