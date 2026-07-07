@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
+    branches-ignore:
+      - "ci/**"
+      - "docs/**"
   pull_request:
 
 jobs:
   ci:
+    # pull_request branch filters only match the base branch, so skip PRs from
+    # ci/* and docs/* head branches here instead.
+    if: github.event_name != 'pull_request' || (!startsWith(github.head_ref, 'ci/') && !startsWith(github.head_ref, 'docs/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
