@@ -54,3 +54,14 @@ Passing threshold: 66%.
 
 ## Verification
 For terminal/exercise changes: verify behavior in the browser and/or the e2e harnesses above, not just `npm run build` — "looks right" and "behaves right" differ. New exercise images must be added to `scripts/cluster/exercise-images.txt` (registry pulls are slow here; nodes are pre-warmed). Commit at the end of each clean step.
+
+## Git
+The `main` branch is **protected** — direct pushes to `main` are strictly forbidden. Every change, no matter how small, goes on a dedicated branch and is merged via pull request.
+
+Branch naming convention (pick the prefix by the type of change):
+- `docs/<branch-name>` — documentation / file updates
+- `ci/<branch-name>` — CI/CD changes
+- `feat/<branch-name>` — new features
+- `fix/<branch-name>` — bug fixes
+
+CI intentionally skips runs on `ci/*` and `docs/*` branches (metadata-only changes) — see `.github/workflows/ci.yml`.
