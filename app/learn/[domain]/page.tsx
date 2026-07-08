@@ -7,11 +7,12 @@ import { getDomain } from "@/lib/constants/domains";
 import { getExercises, getLessons, getQuiz } from "@/lib/content/registry";
 
 interface Props {
-  params: { domain: string };
+  params: Promise<{ domain: string }>;
 }
 
-export default function DomainPage({ params }: Props) {
-  const domain = getDomain(params.domain);
+export default async function DomainPage({ params }: Props) {
+  const { domain: domainSlug } = await params;
+  const domain = getDomain(domainSlug);
   if (!domain) notFound();
 
   const lessons = getLessons(domain.id);

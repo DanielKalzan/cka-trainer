@@ -5,11 +5,12 @@ import { getDomain } from "@/lib/constants/domains";
 import { getQuiz } from "@/lib/content/registry";
 
 interface Props {
-  params: { domain: string };
+  params: Promise<{ domain: string }>;
 }
 
-export default function QuizPage({ params }: Props) {
-  const domain = getDomain(params.domain);
+export default async function QuizPage({ params }: Props) {
+  const { domain: domainSlug } = await params;
+  const domain = getDomain(domainSlug);
   if (!domain) notFound();
   const questions = getQuiz(domain.id);
 
