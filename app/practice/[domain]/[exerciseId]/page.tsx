@@ -5,13 +5,14 @@ import { getDomain } from "@/lib/constants/domains";
 import { getExercise } from "@/lib/content/registry";
 
 interface Props {
-  params: { domain: string; exerciseId: string };
+  params: Promise<{ domain: string; exerciseId: string }>;
 }
 
-export default function ExercisePage({ params }: Props) {
-  const domain = getDomain(params.domain);
+export default async function ExercisePage({ params }: Props) {
+  const { domain: domainSlug, exerciseId } = await params;
+  const domain = getDomain(domainSlug);
   if (!domain) notFound();
-  const exercise = getExercise(domain.id, params.exerciseId);
+  const exercise = getExercise(domain.id, exerciseId);
   if (!exercise) notFound();
 
   return (

@@ -2,10 +2,11 @@ import PageHeader from "@/components/PageHeader";
 import ExamResults from "@/components/exam/ExamResults";
 
 interface Props {
-  params: { attemptId: string };
+  params: Promise<{ attemptId: string }>;
 }
 
-export default function ExamResultsPage({ params }: Props) {
+export default async function ExamResultsPage({ params }: Props) {
+  const { attemptId } = await params;
   return (
     <>
       <PageHeader
@@ -13,7 +14,7 @@ export default function ExamResultsPage({ params }: Props) {
         subtitle="Points-weighted, graded like the real thing."
         breadcrumbs={[{ label: "Mock Exam", href: "/exam" }, { label: "Results" }]}
       />
-      <ExamResults attemptId={params.attemptId} />
+      <ExamResults attemptId={attemptId} />
     </>
   );
 }
