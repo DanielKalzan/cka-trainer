@@ -38,11 +38,17 @@
     "concurrently": "^10.0.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
-    "postcss": "^8",
+    "postcss": "^8.5.10",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.23.0",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "@next/eslint-plugin-next": {
+      "glob": "^11"
+    },
+    "postcss": "$postcss"
   },
   "allowScripts": {
     "node-pty@1.1.0": true
