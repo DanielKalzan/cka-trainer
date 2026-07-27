@@ -97,7 +97,7 @@ jobs:
 
       # Third-party actions pinned to a commit SHA (version in comment) so a
       # retargeted tag can't inject code into a job that holds packages: write.
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
